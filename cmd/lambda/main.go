@@ -71,20 +71,6 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 			}, nil
 		}
 
-		// parse url path
-		path := event.RawPath
-		var certificateType uint32
-
-		switch path {
-		case "/sign_user_key":
-			certificateType = ssh.UserCert
-		default:
-			return events.APIGatewayV2HTTPResponse{
-				StatusCode: 400,
-				Body:       "invalid certificate type requested",
-			}, nil
-		}
-
 		token := strings.TrimPrefix(authHeader, "Bearer ")
 		claims, err := extractClaimsFromToken(token)
 		if err != nil || claims.Email == "" {
@@ -100,7 +86,7 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		}
 
 		// Sign the certificate using the Signer
-		userSSHCert, err := deps.Signer.Sign(certificateType, pubKey, []string{claims.Email}, certificateExpiration)
+		userSSHCert, err := deps.Signer.Sign(uint32(ssh.UserCert), pubKey, []string{claims.Email}, certificateExpiration)
 		if err != nil {
 			log.Printf("failed to sign certificate: %v", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: "failed to sign certificate"}, nil
