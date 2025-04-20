@@ -1,8 +1,8 @@
 # Variables
 LAMBDA_ENTRY=cmd/lambda/main.go
 CLI_ENTRY=cmd/cli/main.go
-LAMBDA_OUTPUT=lambda_build/bootstrap
-LAMBDA_ZIP=lambda_build/lambda.zip
+LAMBDA_OUTPUT=build/bootstrap
+LAMBDA_ZIP=build/lambda.zip
 CLI_OUTPUT=bin/cli
 GOOS=linux
 GOARCH=amd64
