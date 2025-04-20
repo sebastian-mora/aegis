@@ -11,3 +11,6 @@ module "aeige_cert_signer" {
   host_ca_secret_name = var.host_ca_secret_name
 }
 
+output "api_url" {
+  value = module.aeige_cert_signer.api_url
+}

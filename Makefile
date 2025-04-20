@@ -1,5 +1,5 @@
 # Variables
-LAMBDA_ENTRY=cmd/lambda/main.go
+LAMBDA_ENTRY=cmd/lambda/sign_key/main.go
 CLI_ENTRY=cmd/userclient/main.go
 LAMBDA_OUTPUT=build/bootstrap
 LAMBDA_ZIP=build/lambda.zip
@@ -28,11 +28,11 @@ build: build-cli build-lambda
 ## Run `terraform apply`
 deploy:
 	@echo "🚢 Deploying with Terraform..."
-	cd terraform && terraform apply -auto-approve
+	cd terraform && terraform apply $(if $(VAR_FILE),-var-file=$(VAR_FILE))
 
 ## Run `terraform plan`
 plan:
-	cd terraform && terraform plan
+	cd terraform && terraform plan $(if $(VAR_FILE),-var-file=$(VAR_FILE))
 
 ## Run gofmt and go vet
 format:
