@@ -7,7 +7,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -82,8 +81,6 @@ func main() {
 
 	config, err := loadConfig(configPath)
 
-	fmt.Println("🔑 Loading configuration from:", config)
-
 	if err != nil {
 		fatal("Failed to load configuration from ~/.ssh/aegis_config: %v", err)
 	}
@@ -130,12 +127,12 @@ func main() {
 		fatal("Failed to write certificate to file: %v", err)
 	}
 
-	fmt.Printf("✅ SSH certificate saved to: %s\n", keyPath)
-	fmt.Println("🔍 Inspecting SSH certificate...")
+	fmt.Printf("✅ SSH certificate saved to: ~/.ssh/aegis-cert.pub\n")
+	// fmt.Println("🔍 Inspecting SSH certificate...")
 
-	out, err := exec.Command("ssh-keygen", "-L", "-f", filepath.Join(keyPath, "aegis-cert.pub")).CombinedOutput()
-	if err != nil {
-		fmt.Println("⚠️  Failed to inspect certificate:", err)
-	}
-	fmt.Println(string(out))
+	// out, err := exec.Command("ssh-keygen", "-L", "-f", filepath.Join(keyPath, "aegis-cert.pub")).CombinedOutput()
+	// if err != nil {
+	// 	fmt.Println("⚠️  Failed to inspect certificate:", err)
+	// }
+	// fmt.Println(string(out))
 }
