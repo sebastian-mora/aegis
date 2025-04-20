@@ -1,9 +1,9 @@
 # Variables
 LAMBDA_ENTRY=cmd/lambda/main.go
-CLI_ENTRY=cmd/cli/main.go
+CLI_ENTRY=cmd/userclient/main.go
 LAMBDA_OUTPUT=build/bootstrap
 LAMBDA_ZIP=build/lambda.zip
-CLI_OUTPUT=bin/cli
+CLI_OUTPUT=build/userclient
 GOOS=linux
 GOARCH=amd64
 
@@ -23,7 +23,7 @@ build-lambda:
 	zip -j $(LAMBDA_ZIP) $(LAMBDA_OUTPUT)
 
 ## Build everything (CLI + Lambda)
-build: build-cli zip-lambda
+build: build-cli build-lambda
 
 ## Run `terraform apply`
 deploy:
@@ -34,13 +34,10 @@ deploy:
 plan:
 	cd terraform && terraform plan
 
-## Clean up binaries and zips
-clean:
-	@echo "🧹 Cleaning build artifacts..."
-	rm -rf bin/* lambda_build/bootstrap lambda_build/lambda.zip
-
 ## Run gofmt and go vet
 format:
-	@echo "🎨 Formatting and vetting..."
+	@echo "🎨 Formatting and vetting Go Code..."
 	go fmt ./...
 	go vet ./...
+	@ echo "🎨 Formatting Terraform..."
+	cd terraform && terraform fmt

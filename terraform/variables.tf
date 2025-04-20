@@ -1,6 +1,6 @@
 variable "region" {
   default = "us-east-1"
-  type = string
+  type    = string
 }
 
 variable "jwt_audience" {
