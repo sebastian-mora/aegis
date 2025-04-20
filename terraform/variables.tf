@@ -17,9 +17,6 @@ variable "user_ca_secret_name" {
   type = string
 }
 
-variable "host_ca_secret_name" {
-  type = string
-}
 
 variable "lambda_zip_path" {
   type = string

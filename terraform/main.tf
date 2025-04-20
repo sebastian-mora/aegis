@@ -8,6 +8,5 @@ module "aeige_cert_signer" {
   // lambda vars
   user_ca_secret_name = var.user_ca_secret_name
   lambda_zip_path     = var.lambda_zip_path
-  host_ca_secret_name = var.host_ca_secret_name
 }
 
