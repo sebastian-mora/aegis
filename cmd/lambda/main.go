@@ -62,13 +62,26 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		const certificateExpiration = 24 * time.Hour
 
 		fmt.Printf("Received body: %s\n", event.Body)
-		fmt.Printf("Received headers: %v\n", event.Headers)
 
 		authHeader := event.Headers["authorization"]
 		if authHeader == "" {
 			return events.APIGatewayV2HTTPResponse{
 				StatusCode: 401,
 				Body:       "missing authorization header",
+			}, nil
+		}
+
+		// parse url path
+		path := event.RawPath
+		var certificateType uint32
+
+		switch path {
+		case "/sign_user_key":
+			certificateType = ssh.UserCert
+		default:
+			return events.APIGatewayV2HTTPResponse{
+				StatusCode: 400,
+				Body:       "invalid certificate type requested",
 			}, nil
 		}
 
@@ -87,7 +100,7 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		}
 
 		// Sign the certificate using the Signer
-		userSSHCert, err := deps.Signer.Sign(ssh.UserCert, pubKey, []string{claims.Email}, certificateExpiration)
+		userSSHCert, err := deps.Signer.Sign(certificateType, pubKey, []string{claims.Email}, certificateExpiration)
 		if err != nil {
 			log.Printf("failed to sign certificate: %v", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: "failed to sign certificate"}, nil

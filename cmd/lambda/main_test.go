@@ -59,6 +59,7 @@ func TestLambdaHandler(t *testing.T) {
 		Headers: map[string]string{
 			"authorization": fakeToken,
 		},
+		RawPath: "/sign_user_key",
 		// Dereference pubkey to pass the actual value to MarshalAuthorizedKey
 		Body: string(ssh.MarshalAuthorizedKey(*pubkey)), // Dereference the public key here
 	}
