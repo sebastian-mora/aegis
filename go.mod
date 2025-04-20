@@ -16,6 +16,7 @@ require (
 
 require (
 	github.com/aws/aws-sdk-go v1.55.6
+	github.com/joho/godotenv v1.5.1
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/sys v0.32.0 // indirect
 )

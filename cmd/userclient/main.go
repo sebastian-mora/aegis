@@ -11,21 +11,17 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/joho/godotenv"
 	devicecode "github.com/sebastian-mora/aegis/internal/device_code"
 	"github.com/sebastian-mora/aegis/internal/signer"
 	"golang.org/x/crypto/ssh"
-)
-
-const (
-	authDomain = "https://login.rusecrew.com"
-	clientID   = "YCHWtIM0YraMnq1ptgL0C5Wq0FlSICsv3diLH6LB"
-	scope      = "openid email sign:user_key"
 )
 
 type ClientConfig struct {
 	AuthDomain    string
 	ClientID      string
 	AegisEndpoint string
+	Scope         string
 }
 
 var keyPath = filepath.Join(os.Getenv("HOME"), ".ssh")
@@ -33,6 +29,21 @@ var keyPath = filepath.Join(os.Getenv("HOME"), ".ssh")
 func fatal(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "❌ "+format+"\n", args...)
 	os.Exit(1)
+}
+
+func loadConfig(configPath string) (*ClientConfig, error) {
+	godotenv.Load(configPath)
+
+	config := &ClientConfig{
+		AuthDomain:    os.Getenv("AUTH_DOMAIN"),
+		ClientID:      os.Getenv("CLIENT_ID"),
+		AegisEndpoint: os.Getenv("AEGIS_ENDPOINT"),
+		Scope:         "openid email sign:user_key",
+	}
+	if config.AuthDomain == "" || config.ClientID == "" || config.AegisEndpoint == "" {
+		return nil, fmt.Errorf("missing required environment variables")
+	}
+	return config, nil
 }
 
 func GenerateSSHKeyPair() (string, string, error) {
@@ -65,15 +76,24 @@ func WriteKeyToFile(name, key string) error {
 }
 
 func main() {
+	// Load config from ~/.ssh/aegis_config
 
-	const endpoint = "https://w9ynhnzoik.execute-api.us-east-1.amazonaws.com/prod/sign_user_key"
+	configPath := filepath.Join(os.Getenv("HOME"), ".ssh", "aegis_config")
+
+	config, err := loadConfig(configPath)
+
+	fmt.Println("🔑 Loading configuration from:", config)
+
+	if err != nil {
+		fatal("Failed to load configuration from ~/.ssh/aegis_config: %v", err)
+	}
 
 	fmt.Println("🔐 Aegis Signer CLI")
 
-	deviceCodeClient := devicecode.NewDeviceCodeAuthentik(authDomain, clientID, scope)
+	deviceCodeClient := devicecode.NewDeviceCodeAuthentik(config.AuthDomain, config.ClientID, config.Scope)
 	oauthResp, err := deviceCodeClient.RequestDeviceCode()
 	if err != nil {
-		fatal("❌ Failed to initiate device code request: %v", err)
+		fatal("Failed to initiate device code request: %v", err)
 	}
 
 	fmt.Printf("📲 To authenticate, visit: %s\n", oauthResp.VerfificationURI)
@@ -92,7 +112,7 @@ func main() {
 	fmt.Println("🔧 Generating a new SSH key pair...")
 	pubKey, privKey, _ := GenerateSSHKeyPair()
 
-	signedPubKey, err := signer.NewAegisClient(endpoint, idToken).SubmitPublicKey(pubKey)
+	signedPubKey, err := signer.NewAegisClient(config.AegisEndpoint, idToken).SubmitPublicKey(pubKey)
 
 	if err != nil {
 		fatal("❌ Failed to submit public key: %v", err)
