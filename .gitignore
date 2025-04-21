@@ -1,6 +1,9 @@
 build
 *.zip
 
+*.pub
+*.pem
+
 # Local .terraform directories
 **/.terraform/*
 
