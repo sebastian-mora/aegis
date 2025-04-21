@@ -26,6 +26,6 @@ variable "user_ca_secret_name" {
 
 
 variable "lambda_zip_path" {
-  type = string
+  type    = string
   default = "../build/lambda.zip"
 }

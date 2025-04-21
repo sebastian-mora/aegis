@@ -6,13 +6,13 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 resource "aws_iam_role" "lambda_role" {
-  name               = "lambda-ssh-cert-signing-role"
+  name = "lambda-ssh-cert-signing-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Action    = "sts:AssumeRole"
-        Effect    = "Allow"
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
         Principal = {
           Service = "lambda.amazonaws.com"
         }
@@ -59,7 +59,7 @@ resource "aws_lambda_function" "ssh_cert_signer" {
   architectures = ["x86_64"]
 
   filename         = var.lambda_zip_path
-  source_code_hash = filebase64sha256(var.lambda_zip_path)  
+  source_code_hash = filebase64sha256(var.lambda_zip_path)
 
   environment {
     variables = {
