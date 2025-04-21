@@ -51,8 +51,6 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		fmt.Println("Starting Aegis Signer Lambda function...from HANDLER")
 		const certificateExpiration = 24 * time.Hour
 
-		fmt.Printf("Received body: %s\n", event.Body)
-
 		claims, err := extractClaimsFromRequest(event)
 		if err != nil || claims.Email == "" {
 			log.Printf("failed to extract email from claims: %v", err)
