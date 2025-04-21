@@ -5,7 +5,7 @@ variable "region" {
 
 variable "jwt_audience" {
   description = "The audience for JWT"
-  type        = list(string)
+  type        = string
 }
 
 variable "jwt_issuer" {
@@ -15,9 +15,11 @@ variable "jwt_issuer" {
 
 variable "user_ca_secret_name" {
   type = string
+  default = "aegis-ssh-user-ca"
 }
 
 
 variable "lambda_zip_path" {
   type = string
+  default = "../build/lambda.zip"
 }

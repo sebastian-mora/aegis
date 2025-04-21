@@ -15,23 +15,58 @@ This system provides short-term credentials and simplifies user management, maki
 ### How it Works 
 ![diagram](./img/diagram.png)
 
-### Configure User Client
-Create a configuration file at ~/.ssh/aegis_config:
+
+## Setup from Source
+
+### 1. Generate SSH CA Keys and Store in AWS Secrets Manager
+
+```bash
+ssh-keygen -t rsa -b 4096 -f user_ca -C "user_ca"
 ```
-AUTH_DOMAIN="https://auth.example.com"
+
+Store the private key securely in AWS Secrets Manager:
+```bash
+aws secretsmanager create-secret \
+  --name aegis-ssh-user-ca \
+  --secret-string file://user_ca \
+  --description "SSH User CA Private Key" \
+  --region us-east-1
+```
+💡 If you choose a different name for the secret, update your Terraform variables accordingly.
+
+### 2. Build the Project
+
+```bash
+make build
+```
+
+### 3.  Deploy AWS Infrastructure
+
+Before deployment, ensure you have the following OAuth values:
+- Audience
+- Issuer URL
+
+Then deploy the infrastructure:
+
+```bash
+make deploy-infra
+```
+
+### 4. Configure Aegis User Client
+```bash
+cat <<EOF >> ~/.ssh/aegis_config
+AUTH_DOMAIN="https://login.example.com"
 CLIENT_ID="ABCD"
-AEGIS_ENDPOINT="https://xxxxxxxx.execute-api.us-east-1.amazonaws.com/prod/sign_user_key"
+AEGIS_ENDPOINT="https://abcx.execute-api.us-east-1.amazonaws.com/..."
+EOF
 ```
 
-### Configure Terraform Deployment
-
-
-Example `terraform.tfvars` file:
-
-```hcl
-jwt_audience        = ["AUD"]
-jwt_issuer          = "https://auth.example.com/application/o/APP_NAME/"
-user_ca_secret_name = "ssh_user_ca_pem"
+Alternatively, you can pass the values directly via the command line:
+```bash
+./aegis \
+  --auth-url https://login.example.com \
+  --clientid ABCD \
+  --aegis-endpoint https://abcx.execute-api.us-east-1.amazonaws.com/...
 ```
 
 

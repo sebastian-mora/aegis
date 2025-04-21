@@ -26,9 +26,9 @@ build-lambda:
 build: build-cli build-lambda
 
 ## Run `terraform apply`
-deploy:
+deploy-infra:
 	@echo "🚢 Deploying with Terraform..."
-	cd terraform && terraform apply -auto-approve
+	cd terraform && terraform init && terraform apply -auto-approve
 
 ## Run `terraform plan`
 plan:
