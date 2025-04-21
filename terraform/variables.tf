@@ -14,12 +14,12 @@ variable "jwt_issuer" {
 }
 
 variable "user_ca_secret_name" {
-  type = string
+  type    = string
   default = "aegis-ssh-user-ca"
 }
 
 
 variable "lambda_zip_path" {
-  type = string
+  type    = string
   default = "../build/lambda.zip"
 }
