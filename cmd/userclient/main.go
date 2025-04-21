@@ -104,12 +104,12 @@ func main() {
 	if err != nil {
 		fatal("❌ Authentication failed: %v", err)
 	}
-	idToken := tokenResp.IdToken
+	accessToken := tokenResp.AccessToken
 
 	fmt.Println("🔧 Generating a new SSH key pair...")
 	pubKey, privKey, _ := GenerateSSHKeyPair()
 
-	signedPubKey, err := signer.NewAegisClient(config.AegisEndpoint, idToken).SubmitPublicKey(pubKey)
+	signedPubKey, err := signer.NewAegisClient(config.AegisEndpoint, accessToken).SubmitPublicKey(pubKey)
 
 	if err != nil {
 		fatal("❌ Failed to submit public key: %v", err)
