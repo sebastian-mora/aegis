@@ -21,7 +21,7 @@ This system provides short-term credentials and simplifies user management, maki
 ### 1. Generate SSH CA Keys and Store in AWS Secrets Manager
 
 ```bash
-ssh-keygen -t rsa -b 4096 -f user_ca -C "user_ca"
+ssh-keygen -t rsa -b 4096 -f user_ca -C "user_ca" -N ""
 ```
 
 Store the private key securely in AWS Secrets Manager:

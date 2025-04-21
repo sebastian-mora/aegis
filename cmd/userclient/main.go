@@ -134,7 +134,7 @@ func main() {
 	signedPubKey, err := signer.NewAegisClient(config.AegisEndpoint, accessToken).SubmitPublicKey(pubKey)
 
 	if err != nil {
-		fatal("❌ Failed to submit public key: %v", err)
+		fatal("Failed to submit public key: %v", err)
 	}
 	fmt.Println("✅ Public key signed successfully by Aegis!")
 

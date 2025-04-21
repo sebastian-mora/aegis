@@ -17,7 +17,7 @@ import (
 // Claims struct for the JWT payload
 type Claims struct {
 	Email    string `json:"email"`
-	Username string `json:"username"`
+	Username string `json:"user"`
 }
 
 // LambdaDeps includes only the Signer now
@@ -33,9 +33,9 @@ func extractClaimsFromRequest(event events.APIGatewayV2HTTPRequest) (*Claims, er
 		return nil, fmt.Errorf("email claim missing")
 	}
 
-	username, ok := claimsMap["username"]
+	username, ok := claimsMap["name"]
 	if !ok {
-		return nil, fmt.Errorf("username claim missing")
+		return nil, fmt.Errorf("name claim missing")
 	}
 
 	return &Claims{
@@ -65,7 +65,7 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		}
 
 		// Sign the certificate using the Signer
-		userSSHCert, err := deps.Signer.Sign(uint32(ssh.UserCert), pubKey, []string{claims.Email}, certificateExpiration)
+		userSSHCert, err := deps.Signer.Sign(uint32(ssh.UserCert), pubKey, []string{claims.Email, claims.Username}, certificateExpiration)
 		if err != nil {
 			log.Printf("failed to sign certificate: %v", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: "failed to sign certificate"}, nil
