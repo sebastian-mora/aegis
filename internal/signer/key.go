@@ -9,7 +9,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func NewEd25519KeyPair() (string, string, error) {
+func NewEd25519KeyPair() (pubKey string, privKey string, err error) {
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return "", "", fmt.Errorf("key generation failed: %w", err)
