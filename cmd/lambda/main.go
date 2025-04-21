@@ -98,14 +98,21 @@ func main() {
 	secret_name := os.Getenv("USER_CA_KEY_NAME")
 
 	// Load the certificate signer from AWS Secrets Manager
-	caCertSigner, err := signer.NewAWSSMSource(secret_name, sess).Load()
+	caCert, err := GetSecretFromSecretsManager(sess, secret_name)
 	if err != nil {
 		log.Printf("failed to load cert signer: %v", err)
 		return
 	}
 
-	// Initialize the SSH signer
-	sshSigner := &signer.SSHCASigner{CAPrivateKey: caCertSigner}
+	// Create a new SSH signer from the private key
+	caCertSigner, err := ssh.ParsePrivateKey([]byte(caCert))
+	if err != nil {
+		log.Printf("failed to parse private key: %v", err)
+		return
+	}
+
+	// // Initialize the SSH signer
+	sshSigner := signer.NewSSHCASigner(caCertSigner)
 
 	// Inject dependencies into LambdaDeps
 	deps := LambdaDeps{

@@ -47,7 +47,7 @@ func TestSign(t *testing.T) {
 	}
 
 	// Create a new SSHCASigner with the generated private key
-	sshSigner := &signer.SSHCASigner{CAPrivateKey: caCertSigner}
+	sshSigner := signer.NewSSHCASigner(caCertSigner)
 
 	// Sign the public key with the CA signer
 	cert, err := sshSigner.Sign(ssh.UserCert, pubKey, []string{"user1"}, 24*time.Hour)

@@ -36,7 +36,7 @@ func TestLambdaHandler(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Initialize the SSH signer
-	sshSigner := &signer.SSHCASigner{CAPrivateKey: caCertSigner}
+	sshSigner := signer.NewSSHCASigner(caCertSigner)
 
 	// Generate a new SSH key pair for the user
 	_, pubkey, err := generateSSHKey()

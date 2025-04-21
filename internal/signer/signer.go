@@ -13,7 +13,11 @@ type Signer interface {
 }
 
 type SSHCASigner struct {
-	CAPrivateKey ssh.Signer
+	Signer ssh.Signer
+}
+
+func NewSSHCASigner(signer ssh.Signer) *SSHCASigner {
+	return &SSHCASigner{Signer: signer}
 }
 
 func (s *SSHCASigner) Sign(certType uint32, publicKey ssh.PublicKey, principals []string, expiration time.Duration) (*ssh.Certificate, error) {
@@ -44,7 +48,7 @@ func (s *SSHCASigner) Sign(certType uint32, publicKey ssh.PublicKey, principals 
 		return nil, fmt.Errorf("unsupported certificate type: %d", certType)
 	}
 
-	if err := cert.SignCert(rand.Reader, s.CAPrivateKey); err != nil {
+	if err := cert.SignCert(rand.Reader, s.Signer); err != nil {
 		return nil, err
 	}
 
