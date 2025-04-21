@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	devicecode "github.com/sebastian-mora/aegis/internal/device_code"
+	"github.com/sebastian-mora/aegis/internal/devicecode"
 	"github.com/sebastian-mora/aegis/internal/signer"
 )
 

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	devicecode "github.com/sebastian-mora/aegis/internal/device_code"
+	"github.com/sebastian-mora/aegis/internal/devicecode"
 	"github.com/stretchr/testify/assert"
 )
 
