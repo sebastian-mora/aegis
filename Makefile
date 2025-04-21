@@ -1,6 +1,6 @@
 # Variables
-LAMBDA_ENTRY=cmd/lambda/main.go
-CLI_ENTRY=cmd/userclient/main.go
+LAMBDA_ENTRY=./cmd/lambda
+CLI_ENTRY=./cmd/userclient
 LAMBDA_OUTPUT=build/bootstrap
 LAMBDA_ZIP=build/lambda.zip
 CLI_OUTPUT=build/userclient

@@ -2,10 +2,9 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
-	"encoding/pem"
+	"flag"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -13,7 +12,6 @@ import (
 	"github.com/joho/godotenv"
 	devicecode "github.com/sebastian-mora/aegis/internal/device_code"
 	"github.com/sebastian-mora/aegis/internal/signer"
-	"golang.org/x/crypto/ssh"
 )
 
 type ClientConfig struct {
@@ -21,13 +19,57 @@ type ClientConfig struct {
 	ClientID      string
 	AegisEndpoint string
 	Scope         string
+	KeyOutputPath string
 }
 
-var keyPath = filepath.Join(os.Getenv("HOME"), ".ssh")
+var (
+	verboseFlag       bool
+	authDomainFlag    string
+	clientIDFlag      string
+	aegisEndpointFlag string
+	configPathFlag    string
+	keyOutputPathFlag string
+	config            ClientConfig
+)
 
-func fatal(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "❌ "+format+"\n", args...)
-	os.Exit(1)
+func init() {
+	flag.StringVar(&authDomainFlag, "auth-url", "", "Url to the authentication server")
+	flag.StringVar(&clientIDFlag, "client-id", "", "Client ID for the authentication server")
+	flag.StringVar(&aegisEndpointFlag, "aegis-endpoint", "", "Aegis endpoint")
+	flag.BoolVar(&verboseFlag, "verbose", false, "Enable verbose output")
+	flag.StringVar(&configPathFlag, "config", filepath.Join(os.Getenv("HOME"), ".ssh", "aegis_config"), "Path to the configuration file")
+	flag.StringVar(&keyOutputPathFlag, "key-output-path", filepath.Join(os.Getenv("HOME"), ".ssh"), "Path to save the generated keys")
+	flag.Parse()
+
+	fileConfig, err := loadConfig(configPathFlag)
+
+	if err != nil {
+		log.Default().Printf("Failed to load configuration from %s: %v\n", configPathFlag, err)
+	}
+
+	// Override config with command line flags if provided
+	if authDomainFlag != "" {
+		fileConfig.AuthDomain = authDomainFlag
+	}
+	if clientIDFlag != "" {
+		fileConfig.ClientID = clientIDFlag
+	}
+	if aegisEndpointFlag != "" {
+		fileConfig.AegisEndpoint = aegisEndpointFlag
+	}
+	if keyOutputPathFlag != "" {
+		fileConfig.KeyOutputPath = keyOutputPathFlag
+	}
+
+	// Set the config
+	config = *fileConfig
+	if verboseFlag {
+		fmt.Printf("Using configuration: %+v\n", config)
+	}
+	if config.AuthDomain == "" || config.ClientID == "" || config.AegisEndpoint == "" {
+		fatal("Missing required configuration values. Please provide them via flags or in the config file.")
+	}
+
 }
 
 func loadConfig(configPath string) (*ClientConfig, error) {
@@ -45,45 +87,20 @@ func loadConfig(configPath string) (*ClientConfig, error) {
 	return config, nil
 }
 
-func GenerateSSHKeyPair() (string, string, error) {
-	_, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return "", "", fmt.Errorf("key generation failed: %w", err)
-	}
-
-	signer, err := ssh.NewSignerFromKey(priv)
-	if err != nil {
-		return "", "", fmt.Errorf("ssh signer creation failed: %w", err)
-	}
-
-	publicKey := string(ssh.MarshalAuthorizedKey(signer.PublicKey()))
-
-	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "OPENSSH PRIVATE KEY",
-		Bytes: priv.Seed(),
-	})
-
-	return publicKey, string(privateKeyPEM), nil
-}
-
 func WriteKeyToFile(name, key string) error {
-	err := os.WriteFile(filepath.Join(keyPath, name), []byte(key), 0600)
+	err := os.WriteFile(filepath.Join(config.KeyOutputPath, name), []byte(key), 0600)
 	if err != nil {
 		return fmt.Errorf("write key to file failed: %w", err)
 	}
 	return nil
 }
 
+func fatal(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "❌ "+format+"\n", args...)
+	os.Exit(1)
+}
+
 func main() {
-	// Load config from ~/.ssh/aegis_config
-
-	configPath := filepath.Join(os.Getenv("HOME"), ".ssh", "aegis_config")
-
-	config, err := loadConfig(configPath)
-
-	if err != nil {
-		fatal("Failed to load configuration from ~/.ssh/aegis_config: %v", err)
-	}
 
 	fmt.Println("🔐 Aegis Signer CLI")
 
@@ -109,7 +126,10 @@ func main() {
 	fmt.Printf("👤 User authenticated: %s\n", idClaims.Name)
 
 	fmt.Println("🔧 Generating a new SSH key pair...")
-	pubKey, privKey, _ := GenerateSSHKeyPair()
+	pubKey, privKey, err := signer.NewEd25519KeyPair()
+	if err != nil {
+		fatal("❌ Key generation failed: %v", err)
+	}
 
 	signedPubKey, err := signer.NewAegisClient(config.AegisEndpoint, accessToken).SubmitPublicKey(pubKey)
 
@@ -130,11 +150,4 @@ func main() {
 	}
 
 	fmt.Printf("\tSSH certificate saved to: ~/.ssh/aegis-cert.pub\n")
-	// fmt.Println("🔍 Inspecting SSH certificate...")
-
-	// out, err := exec.Command("ssh-keygen", "-L", "-f", filepath.Join(keyPath, "aegis-cert.pub")).CombinedOutput()
-	// if err != nil {
-	// 	fmt.Println("⚠️  Failed to inspect certificate:", err)
-	// }
-	// fmt.Println(string(out))
 }
