@@ -37,7 +37,7 @@ func loadConfig(configPath string) (*ClientConfig, error) {
 		AuthDomain:    os.Getenv("AUTH_DOMAIN"),
 		ClientID:      os.Getenv("CLIENT_ID"),
 		AegisEndpoint: os.Getenv("AEGIS_ENDPOINT"),
-		Scope:         "openid email sign:user_key",
+		Scope:         "openid email profile sign:user_key",
 	}
 	if config.AuthDomain == "" || config.ClientID == "" || config.AegisEndpoint == "" {
 		return nil, fmt.Errorf("missing required environment variables")
@@ -95,7 +95,7 @@ func main() {
 
 	fmt.Printf("📲 To authenticate, visit: %s\n", oauthResp.VerfificationURI)
 
-	fmt.Println("⏳ Waiting for login...")
+	fmt.Println("\tWaiting for login...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(oauthResp.ExpiresIn)*time.Second)
 	defer cancel()
@@ -105,6 +105,8 @@ func main() {
 		fatal("❌ Authentication failed: %v", err)
 	}
 	accessToken := tokenResp.AccessToken
+	idClaims, _ := devicecode.ParseIDToken(tokenResp.IdToken)
+	fmt.Printf("👤 User authenticated: %s\n", idClaims.Name)
 
 	fmt.Println("🔧 Generating a new SSH key pair...")
 	pubKey, privKey, _ := GenerateSSHKeyPair()
@@ -127,7 +129,7 @@ func main() {
 		fatal("Failed to write certificate to file: %v", err)
 	}
 
-	fmt.Printf("✅ SSH certificate saved to: ~/.ssh/aegis-cert.pub\n")
+	fmt.Printf("\tSSH certificate saved to: ~/.ssh/aegis-cert.pub\n")
 	// fmt.Println("🔍 Inspecting SSH certificate...")
 
 	// out, err := exec.Command("ssh-keygen", "-L", "-f", filepath.Join(keyPath, "aegis-cert.pub")).CombinedOutput()
