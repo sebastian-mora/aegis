@@ -33,7 +33,7 @@ var (
 )
 
 func init() {
-	flag.StringVar(&authDomainFlag, "auth-url", "", "URL to the authentication server")
+	flag.StringVar(&authDomainFlag, "auth-url", "", "Url to the authentication server")
 	flag.StringVar(&clientIDFlag, "client-id", "", "Client ID for the authentication server")
 	flag.StringVar(&aegisEndpointFlag, "aegis-endpoint", "", "Aegis endpoint")
 	flag.BoolVar(&verboseFlag, "verbose", false, "Enable verbose output")
@@ -41,10 +41,9 @@ func init() {
 	flag.StringVar(&keyOutputPathFlag, "key-output-path", filepath.Join(os.Getenv("HOME"), ".ssh"), "Path to save the generated keys")
 	flag.Parse()
 
-	// Load the configuration file
 	fileConfig, err := loadConfig(configPathFlag)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("Failed to load configuration from %s: %v", configPathFlag, err))
+		log.Default().Printf("Failed to load configuration from %s: %v\n", configPathFlag, err)
 	}
 
 	// Override config with command line flags if provided
@@ -66,18 +65,13 @@ func init() {
 	if verboseFlag {
 		fmt.Printf("Using configuration: %+v\n", config)
 	}
-
 	if config.AuthDomain == "" || config.ClientID == "" || config.AegisEndpoint == "" {
 		fatal("Missing required configuration values. Please provide them via flags or in the config file.")
 	}
 }
 
 func loadConfig(configPath string) (*ClientConfig, error) {
-	// Load environment variables from the config path
-	err := godotenv.Load(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load .env file: %w", err)
-	}
+	godotenv.Load(configPath)
 
 	config := &ClientConfig{
 		AuthDomain:    os.Getenv("AUTH_DOMAIN"),
@@ -92,14 +86,7 @@ func loadConfig(configPath string) (*ClientConfig, error) {
 }
 
 func WriteKeyToFile(name, key string) error {
-	// Ensure the output path exists
-	err := os.MkdirAll(config.KeyOutputPath, 0700)
-	if err != nil {
-		return fmt.Errorf("failed to create output directory: %w", err)
-	}
-
-	// Write the key to file
-	err = os.WriteFile(filepath.Join(config.KeyOutputPath, name), []byte(key), 0600)
+	err := os.WriteFile(filepath.Join(config.KeyOutputPath, name), []byte(key), 0600)
 	if err != nil {
 		return fmt.Errorf("write key to file failed: %w", err)
 	}
@@ -111,10 +98,7 @@ func fatal(format string, args ...any) {
 	os.Exit(1)
 }
 
-func main() {
-	fmt.Println("🔐 Aegis Signer CLI")
-
-	var accessToken string
+func getAccessToken() string {
 	accessTokenFilePath := filepath.Join(config.KeyOutputPath, "aegis_access_token")
 
 	// Check if the access token file exists
@@ -124,7 +108,7 @@ func main() {
 		if err != nil {
 			fatal("Failed to read access token file: %v", err)
 		}
-		accessToken = string(data)
+		accessToken := string(data)
 
 		// Check if the access token is expired
 		tokenClaims, err := devicecode.ParseAccessToken(accessToken)
@@ -132,49 +116,37 @@ func main() {
 			fatal("Failed to parse access token: %v", err)
 		}
 		if tokenClaims.Exp < time.Now().Unix() {
-			fmt.Println("Access token is expired. Re-authenticating...")
-			accessToken = "" // Reset token and re-authenticate
+			accessToken = ""
 		}
+
+		return accessToken
 	}
+	return ""
+}
 
-	// If the access token is not available or expired, authenticate using the device code flow
-	if accessToken == "" {
-		deviceCodeClient := devicecode.NewDeviceCodeAuthentik(config.AuthDomain, config.ClientID, config.Scope)
-		oauthResp, err := deviceCodeClient.RequestDeviceCode()
-		if err != nil {
-			fatal("Failed to initiate device code request: %v", err)
-		}
-
-		fmt.Printf("📲 To authenticate, visit: %s\n", oauthResp.VerfificationURI)
-		fmt.Println("\tWaiting for login...")
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(oauthResp.ExpiresIn)*time.Second)
-		defer cancel()
-
-		tokenResp, err := deviceCodeClient.PollDeviceCode(ctx, *oauthResp)
-		if err != nil {
-			fatal("❌ Authentication failed: %v", err)
-		}
-		accessToken = tokenResp.AccessToken
-	}
-
-	// Parse the access token claims
-	tokenClaims, _ := devicecode.ParseAccessToken(accessToken)
-	fmt.Printf("👤 User authenticated: %s\n", tokenClaims.Name)
-
-	// Generate SSH key pair
-	fmt.Println("🔧 Generating a new SSH key pair...")
-	pubKey, privKey, err := signer.NewEd25519KeyPair()
+func authenticateUser() string {
+	// If the access token file doesn't exist or it's expired, initiate device code authentication
+	deviceCodeClient := devicecode.NewDeviceCodeAuthentik(config.AuthDomain, config.ClientID, config.Scope)
+	oauthResp, err := deviceCodeClient.RequestDeviceCode()
 	if err != nil {
-		fatal("❌ Key generation failed: %v", err)
+		fatal("Failed to initiate device code request: %v", err)
 	}
 
-	// Sign the public key with Aegis
-	signedPubKey, err := signer.NewAegisClient(config.AegisEndpoint, accessToken).SubmitPublicKey(pubKey)
+	fmt.Printf("📲 To authenticate, visit: %s\n", oauthResp.VerfificationURI)
+	fmt.Println("\tWaiting for login...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(oauthResp.ExpiresIn)*time.Second)
+	defer cancel()
+
+	tokenResp, err := deviceCodeClient.PollDeviceCode(ctx, *oauthResp)
 	if err != nil {
-		fatal("Failed to submit public key: %v", err)
+		fatal("❌ Authentication failed: %v", err)
 	}
-	fmt.Println("✅ Public key signed successfully by Aegis!")
+
+	return tokenResp.AccessToken
+}
+
+func saveKeyPair(pubKey, signedPubKey, privKey string) {
 
 	// Save the keys to files
 	if err := WriteKeyToFile("aegis.pub", pubKey); err != nil {
@@ -186,11 +158,65 @@ func main() {
 	if err := WriteKeyToFile("aegis-cert.pub", string(signedPubKey)); err != nil {
 		fatal("Failed to write certificate to file: %v", err)
 	}
+}
 
+func submitPublicKeyForAegisSigning(accessToken string, pubKey string) ([]byte, error) {
+	// Create a new Aegis client
+	aegisClient := signer.NewAegisClient(config.AegisEndpoint, accessToken)
+
+	// Submit the public key to Aegis for signing
+	signedPubKey, err := aegisClient.SubmitPublicKey(pubKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to submit public key: %w", err)
+	}
+
+	return signedPubKey, nil
+}
+
+func saveAccessToken(accessToken string) {
 	// Save the access token to a file
+	accessTokenFilePath := filepath.Join(config.KeyOutputPath, "aegis_access_token")
 	if err := os.WriteFile(accessTokenFilePath, []byte(accessToken), 0600); err != nil {
 		fatal("Failed to write access token to file: %v", err)
 	}
+}
 
-	fmt.Printf("\tSSH certificate saved to: %s\n", filepath.Join(config.KeyOutputPath, "aegis-cert.pub"))
+func main() {
+	fmt.Println("🔐 Aegis Signer CLI")
+
+	// Get or authenticate the user to get an access token
+	accessToken := getAccessToken()
+	if accessToken == "" {
+		fmt.Println("🔄 Access token is expired. Re-authenticating...")
+		accessToken = authenticateUser()
+	}
+
+	tokenClaims, _ := devicecode.ParseAccessToken(accessToken)
+	fmt.Printf("👤 User authenticated: %s\n", tokenClaims.Name)
+
+	// Generate a new Ed25519 key pair
+	fmt.Println("🔑 Generating Ed25519 key pair...")
+
+	pubKey, privKey, err := signer.NewEd25519KeyPair()
+	if err != nil {
+		fatal("Failed to generate key pair: %v", err)
+	}
+
+	// Submit the public key to Aegis for signing
+	fmt.Println("🚀 Submitting public key to Aegis for signing...")
+
+	signedPubKey, err := submitPublicKeyForAegisSigning(accessToken, pubKey)
+	if err != nil {
+		fatal("Failed to submit public key for signing: %v", err)
+	}
+
+	// Save the keys to files
+	saveKeyPair(pubKey, string(signedPubKey), privKey)
+	fmt.Printf("\tPublic key saved to: %s/aegis.pub\n", config.KeyOutputPath)
+	fmt.Printf("\tPrivate key saved to: %s/aegis\n", config.KeyOutputPath)
+	fmt.Printf("\tCertificate saved to: %s/aegis-cert.pub\n", config.KeyOutputPath)
+
+	// Save the access token
+	saveAccessToken(accessToken)
+
 }
