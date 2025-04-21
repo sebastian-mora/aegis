@@ -2,12 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -28,30 +25,23 @@ type LambdaDeps struct {
 	Signer signer.Signer
 }
 
-func extractClaimsFromToken(token string) (*Claims, error) {
-	// Split the token into three parts (Header, Payload, Signature)
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid token format")
+func extractClaimsFromRequest(event events.APIGatewayV2HTTPRequest) (*Claims, error) {
+	claimsMap := event.RequestContext.Authorizer.JWT.Claims
+
+	email, ok := claimsMap["email"]
+	if !ok {
+		return nil, fmt.Errorf("email claim missing")
 	}
 
-	// Extract the payload segment (the second part of the JWT)
-	payloadSegment := parts[1]
-
-	// Decode the base64-encoded payload
-	decoded, err := base64.RawURLEncoding.DecodeString(payloadSegment)
-	if err != nil {
-		return nil, err
+	username, ok := claimsMap["username"]
+	if !ok {
+		return nil, fmt.Errorf("username claim missing")
 	}
 
-	// Unmarshal the decoded payload into the Claims struct
-	var claims Claims
-	if err := json.Unmarshal(decoded, &claims); err != nil {
-		return nil, err
-	}
-
-	// Return the populated Claims struct
-	return &claims, nil
+	return &Claims{
+		Email:    email,
+		Username: username,
+	}, nil
 }
 
 // NewHandler creates a new Lambda handler function
@@ -63,18 +53,9 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 
 		fmt.Printf("Received body: %s\n", event.Body)
 
-		authHeader := event.Headers["authorization"]
-		if authHeader == "" {
-			return events.APIGatewayV2HTTPResponse{
-				StatusCode: 401,
-				Body:       "missing authorization header",
-			}, nil
-		}
-
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		claims, err := extractClaimsFromToken(token)
+		claims, err := extractClaimsFromRequest(event)
 		if err != nil || claims.Email == "" {
-			log.Printf("failed to extract email from token: %v", err)
+			log.Printf("failed to extract email from claims: %v", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 400, Body: "invalid token or missing email claim"}, nil
 		}
 

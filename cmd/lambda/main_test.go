@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
-	"encoding/base64"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -43,11 +42,6 @@ func TestLambdaHandler(t *testing.T) {
 	_, pubkey, err := generateSSHKey()
 	assert.NoError(t, err)
 
-	// Create JWT with email claim: {"email":"testuser@example.com"}
-	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none"}`))
-	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"email":"testuser@example.com", "username":"testuser"}`))
-	fakeToken := header + "." + payload + "."
-
 	// Lambda deps and handler
 	deps := LambdaDeps{
 		Signer: sshSigner,
@@ -56,9 +50,17 @@ func TestLambdaHandler(t *testing.T) {
 
 	// Mock API Gateway event
 	event := events.APIGatewayV2HTTPRequest{
-		Headers: map[string]string{
-			"authorization": fakeToken,
+		RequestContext: events.APIGatewayV2HTTPRequestContext{
+			Authorizer: &events.APIGatewayV2HTTPRequestContextAuthorizerDescription{
+				JWT: &events.APIGatewayV2HTTPRequestContextAuthorizerJWTDescription{
+					Claims: map[string]string{
+						"email":    "testuser@example.com",
+						"username": "testuser",
+					},
+				},
+			},
 		},
+
 		RawPath: "/sign_user_key",
 		// Dereference pubkey to pass the actual value to MarshalAuthorizedKey
 		Body: string(ssh.MarshalAuthorizedKey(*pubkey)), // Dereference the public key here
