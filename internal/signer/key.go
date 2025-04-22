@@ -1,31 +1,63 @@
 package signer
 
 import (
-	"crypto/ed25519"
-	"crypto/rand"
-	"encoding/pem"
 	"fmt"
-
-	"golang.org/x/crypto/ssh"
+	"os"
+	"os/exec"
+	"path/filepath"
 )
 
-func NewEd25519KeyPair() (pubKey string, privKey string, err error) {
-	_, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return "", "", fmt.Errorf("key generation failed: %w", err)
+type SSHAlgorithm string
+
+const (
+	Ed25519 SSHAlgorithm = "ed25519"
+	RSA     SSHAlgorithm = "rsa"
+	ECDSA   SSHAlgorithm = "ecdsa"
+)
+
+func NewSSHKeyPair(algo SSHAlgorithm) (pubKey string, privKey string, err error) {
+
+	// Check if the SSH keygen command is available
+	if _, err := exec.LookPath("ssh-keygen"); err != nil {
+		return "", "", fmt.Errorf("ssh-keygen not found: %w", err)
 	}
 
-	signer, err := ssh.NewSignerFromKey(priv)
-	if err != nil {
-		return "", "", fmt.Errorf("ssh signer creation failed: %w", err)
+	// Check if the algorithm is supported
+	switch algo {
+	case Ed25519, RSA, ECDSA:
+	default:
+		return "", "", fmt.Errorf("unsupported algorithm: %s", algo)
 	}
 
-	publicKey := string(ssh.MarshalAuthorizedKey(signer.PublicKey()))
+	// Use tmpfs-backed secure location
+	tempDir, err := os.MkdirTemp("", "aegis-")
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
 
-	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "OPENSSH PRIVATE KEY",
-		Bytes: priv.Seed(),
-	})
+	keyPath := filepath.Join(tempDir, "aegis")
 
-	return publicKey, string(privateKeyPEM), nil
+	// Generate the SSH keypair
+	cmd := exec.Command("ssh-keygen", "-t", string(algo), "-N", "", "-f", keyPath)
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	if err := cmd.Run(); err != nil {
+		return "", "", fmt.Errorf("ssh-keygen failed: %w", err)
+	}
+
+	// Read private key
+	privBytes, err := os.ReadFile(keyPath)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read private key: %w", err)
+	}
+
+	// Read public key
+	pubBytes, err := os.ReadFile(keyPath + ".pub")
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read public key: %w", err)
+	}
+
+	return string(pubBytes), string(privBytes), nil
 }

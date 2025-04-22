@@ -30,7 +30,7 @@ func TestSign(t *testing.T) {
 	}
 
 	// Generate a new Ed25519 key pair
-	publicKeyStr, _, err := signer.NewEd25519KeyPair()
+	publicKeyStr, _, err := signer.NewSSHKeyPair(signer.Ed25519)
 	if err != nil {
 		t.Fatalf("Failed to generate key pair: %v", err)
 	}

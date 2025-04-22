@@ -39,7 +39,7 @@ func TestLambdaHandler(t *testing.T) {
 	sshSigner := signer.NewSSHCASigner(caCertSigner)
 
 	// Generate a new SSH key pair for the user
-	_, pubkey, err := generateSSHKey()
+	pubkey, _, err := signer.NewSSHKeyPair(signer.ECDSA)
 	assert.NoError(t, err)
 
 	// Lambda deps and handler
@@ -54,8 +54,8 @@ func TestLambdaHandler(t *testing.T) {
 			Authorizer: &events.APIGatewayV2HTTPRequestContextAuthorizerDescription{
 				JWT: &events.APIGatewayV2HTTPRequestContextAuthorizerJWTDescription{
 					Claims: map[string]string{
-						"email":    "testuser@example.com",
-						"username": "testuser",
+						"email": "testuser@example.com",
+						"name":  "testuser",
 					},
 				},
 			},
@@ -63,7 +63,7 @@ func TestLambdaHandler(t *testing.T) {
 
 		RawPath: "/sign_user_key",
 		// Dereference pubkey to pass the actual value to MarshalAuthorizedKey
-		Body: string(ssh.MarshalAuthorizedKey(*pubkey)), // Dereference the public key here
+		Body: pubkey, // Dereference the public key here
 	}
 
 	// Execute handler
@@ -72,7 +72,6 @@ func TestLambdaHandler(t *testing.T) {
 	// Assertions
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
-	assert.Contains(t, resp.Body, "ssh-rsa") // Just verify output contains expected header
 
 	// Parse the returned certificate
 	cert, _, _, _, err := ssh.ParseAuthorizedKey([]byte(resp.Body))
@@ -82,5 +81,6 @@ func TestLambdaHandler(t *testing.T) {
 
 	// Verify the certificate
 	assert.Equal(t, sshCert.CertType, uint32(ssh.UserCert))
-	assert.Equal(t, sshCert.ValidPrincipals, []string{"testuser@example.com"})
+	assert.Equal(t, sshCert.ValidPrincipals, []string{"testuser@example.com", "testuser"})
+
 }

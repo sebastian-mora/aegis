@@ -12,7 +12,7 @@ import (
 func TestParseIdToken(t *testing.T) {
 
 	// Create a test ID Token
-	payload := devicecode.IDTokenClaims{
+	payload := devicecode.TokenClaims{
 		ISS:           "https://example.com",
 		Sub:           "1234567890",
 		Aud:           "my-client-id",
@@ -43,7 +43,7 @@ func TestParseIdToken(t *testing.T) {
 	idTokenString := header + "." + string(encodedPayload) + "." + signature
 
 	// Call the function to parse the ID token
-	claims, err := devicecode.ParseIDToken(idTokenString)
+	claims, err := devicecode.ParseAccessToken(idTokenString)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

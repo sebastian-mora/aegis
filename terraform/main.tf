@@ -11,6 +11,6 @@ module "aeige_cert_signer" {
 }
 
 output "apigw_url" {
-  value = "${module.aeige_cert_signer.api_url}"
+  value       = module.aeige_cert_signer.api_url
   description = "Aegis API Endpoint"
 }

@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-type IDTokenClaims struct {
+type TokenClaims struct {
 	ISS           string   `json:"iss"`
 	Sub           string   `json:"sub"`
 	Aud           string   `json:"aud"`
@@ -23,7 +23,7 @@ type IDTokenClaims struct {
 }
 
 // Function returns parsed strucutre of the ID token
-func ParseIDToken(idToken string) (*IDTokenClaims, error) {
+func ParseAccessToken(idToken string) (*TokenClaims, error) {
 	parts := strings.Split(idToken, ".")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("invalid ID token format")
@@ -34,7 +34,7 @@ func ParseIDToken(idToken string) (*IDTokenClaims, error) {
 		return nil, fmt.Errorf("failed to decode ID token payload: %w", err)
 	}
 
-	var claims IDTokenClaims
+	var claims TokenClaims
 	if err := json.Unmarshal(payload, &claims); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal ID token payload: %w", err)
 	}
