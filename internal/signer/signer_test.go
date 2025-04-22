@@ -3,10 +3,12 @@ package signer_test
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/base64"
 	"testing"
 	"time"
 
 	"github.com/sebastian-mora/aegis/internal/signer"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -20,6 +22,16 @@ func generateSSHKey() (*rsa.PrivateKey, *ssh.PublicKey, error) {
 		return nil, nil, err
 	}
 	return privateKey, &publicKey, nil
+}
+
+func generateMockToken(payload string) string {
+	// Generate a mock JWT token
+	header := base64.StdEncoding.EncodeToString([]byte(`{"alg":"RS256","typ":"JWT"}`))
+	signature := base64.StdEncoding.EncodeToString([]byte("mock-signature"))
+	token := header + "." + base64.StdEncoding.EncodeToString([]byte(payload)) + "." + signature
+
+	return token
+
 }
 
 func TestSign(t *testing.T) {
@@ -82,4 +94,21 @@ func TestSign(t *testing.T) {
 	if len(cert.ValidPrincipals) != 1 || cert.ValidPrincipals[0] != "user1" {
 		t.Errorf("Expected principal %q, got %v", "user1", cert.ValidPrincipals)
 	}
+}
+
+func TestJMESPrincipalMapper(t *testing.T) {
+	// Create a new JMESPathPrincipalMapper
+	mapper := &signer.JMESPathPrincipalMapper{
+		Expressions: []string{"sub", "email", "groups[*]"},
+	}
+
+	// Generate a mock JWT token with payload
+	payload := `{"sub":"user1","email":"test@test.com", "groups":["group1","group2", "user1"]}`
+	token := generateMockToken(payload)
+
+	expectedPrincipals := []string{"user1", "test@test.com", "group1", "group2"}
+	principals, err := mapper.Map(token)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedPrincipals, principals)
 }
