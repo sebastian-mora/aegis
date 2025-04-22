@@ -3,7 +3,6 @@ package signer_test
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"encoding/base64"
 	"testing"
 	"time"
 
@@ -22,16 +21,6 @@ func generateSSHKey() (*rsa.PrivateKey, *ssh.PublicKey, error) {
 		return nil, nil, err
 	}
 	return privateKey, &publicKey, nil
-}
-
-func generateMockToken(payload string) string {
-	// Generate a mock JWT token
-	header := base64.StdEncoding.EncodeToString([]byte(`{"alg":"RS256","typ":"JWT"}`))
-	signature := base64.StdEncoding.EncodeToString([]byte("mock-signature"))
-	token := header + "." + base64.StdEncoding.EncodeToString([]byte(payload)) + "." + signature
-
-	return token
-
 }
 
 func TestSign(t *testing.T) {
