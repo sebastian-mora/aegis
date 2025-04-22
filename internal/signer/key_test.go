@@ -9,7 +9,7 @@ import (
 
 func TestNewEd25519KeyPair(t *testing.T) {
 	// Generate a new Ed25519 key pair
-	publicKey, privateKey, err := signer.NewEd25519KeyPair()
+	publicKey, privateKey, err := signer.NewSSHKeyPair(signer.Ed25519)
 	if err != nil {
 		t.Fatalf("Failed to generate key pair: %v", err)
 	}

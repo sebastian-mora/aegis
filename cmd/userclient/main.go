@@ -197,7 +197,7 @@ func main() {
 	// Generate a new Ed25519 key pair
 	fmt.Println("🔑 Generating Ed25519 key pair...")
 
-	pubKey, privKey, err := signer.NewEd25519KeyPair()
+	pubKey, privKey, err := signer.NewSSHKeyPair(signer.Ed25519)
 	if err != nil {
 		fatal("Failed to generate key pair: %v", err)
 	}
