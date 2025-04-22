@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -14,34 +15,10 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// Claims struct for the JWT payload
-type Claims struct {
-	Email    string `json:"email"`
-	Username string `json:"user"`
-}
-
 // LambdaDeps includes only the Signer now
 type LambdaDeps struct {
-	Signer signer.Signer
-}
-
-func extractClaimsFromRequest(event events.APIGatewayV2HTTPRequest) (*Claims, error) {
-	claimsMap := event.RequestContext.Authorizer.JWT.Claims
-
-	email, ok := claimsMap["email"]
-	if !ok {
-		return nil, fmt.Errorf("email claim missing")
-	}
-
-	username, ok := claimsMap["name"]
-	if !ok {
-		return nil, fmt.Errorf("name claim missing")
-	}
-
-	return &Claims{
-		Email:    email,
-		Username: username,
-	}, nil
+	Signer          signer.Signer
+	PrincipalMapper signer.PrincipalMapper
 }
 
 // NewHandler creates a new Lambda handler function
@@ -51,10 +28,21 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		fmt.Println("Starting Aegis Signer Lambda function...from HANDLER")
 		const certificateExpiration = 24 * time.Hour
 
-		claims, err := extractClaimsFromRequest(event)
-		if err != nil || claims.Email == "" {
-			log.Printf("failed to extract email from claims: %v", err)
-			return events.APIGatewayV2HTTPResponse{StatusCode: 400, Body: "invalid token or missing email claim"}, nil
+		// Massage the JWT claims to map[string]interface{}
+		// This is necessary because the AWS Lambda Go SDK uses a map[string]string
+		// for JWT claims, but we need to convert it to map[string]interface{}
+		// to work with the PrincipalMapper
+		stringClaims := event.RequestContext.Authorizer.JWT.Claims
+		interfaceClaims := make(map[string]interface{}, len(stringClaims))
+		for k, v := range stringClaims {
+			interfaceClaims[k] = v
+		}
+
+		// Map the JWT claims to SSH principals
+		principals, err := deps.PrincipalMapper.Map(interfaceClaims)
+		if err != nil {
+			log.Printf("failed to map principals from token: %v", err)
+			return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: "principal mapping failed"}, nil
 		}
 
 		// Parse the public key from the request body
@@ -65,7 +53,7 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		}
 
 		// Sign the certificate using the Signer
-		userSSHCert, err := deps.Signer.Sign(uint32(ssh.UserCert), pubKey, []string{claims.Email, claims.Username}, certificateExpiration)
+		userSSHCert, err := deps.Signer.Sign(uint32(ssh.UserCert), pubKey, principals, certificateExpiration)
 		if err != nil {
 			log.Printf("failed to sign certificate: %v", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: "failed to sign certificate"}, nil
@@ -109,12 +97,37 @@ func main() {
 		return
 	}
 
+	// Load JSME Expressions from environment variable
+	jmesPathExpressions := os.Getenv("JSME_PATH_EXPRESSIONS")
+	if jmesPathExpressions == "" {
+		log.Printf("failed to load JMESPath expressions from environment variable")
+		return
+	}
+
+	// Split the JMESPath expressions into a slice
+	expressions := []string{}
+	for _, expr := range strings.Split(jmesPathExpressions, ",") {
+		expressions = append(expressions, strings.TrimSpace(expr))
+	}
+
+	// Check if any expressions were provided
+	if len(expressions) == 0 {
+		log.Printf("no JMESPath expressions provided")
+		return
+	}
+
+	// Create JSMEPathPrincipalMapper
+	principalMapper := &signer.JMESPathPrincipalMapper{
+		Expressions: expressions,
+	}
+
 	// // Initialize the SSH signer
 	sshSigner := signer.NewSSHCASigner(caCertSigner)
 
 	// Inject dependencies into LambdaDeps
 	deps := LambdaDeps{
-		Signer: sshSigner,
+		Signer:          sshSigner,
+		PrincipalMapper: principalMapper,
 	}
 
 	// Initialize the handler with injected dependencies
