@@ -28,8 +28,18 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		fmt.Println("Starting Aegis Signer Lambda function...from HANDLER")
 		const certificateExpiration = 24 * time.Hour
 
-		// Map ssh certificate principals from the JWT token
-		principals, err := deps.PrincipalMapper.Map(event.Headers["Authorization"])
+		// Massage the JWT claims to map[string]interface{}
+		// This is necessary because the AWS Lambda Go SDK uses a map[string]string
+		// for JWT claims, but we need to convert it to map[string]interface{}
+		// to work with the PrincipalMapper
+		stringClaims := event.RequestContext.Authorizer.JWT.Claims
+		interfaceClaims := make(map[string]interface{}, len(stringClaims))
+		for k, v := range stringClaims {
+			interfaceClaims[k] = v
+		}
+
+		// Map the JWT claims to SSH principals
+		principals, err := deps.PrincipalMapper.Map(interfaceClaims)
 		if err != nil {
 			log.Printf("failed to map principals from token: %v", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: "principal mapping failed"}, nil
@@ -98,6 +108,12 @@ func main() {
 	expressions := []string{}
 	for _, expr := range strings.Split(jmesPathExpressions, ",") {
 		expressions = append(expressions, strings.TrimSpace(expr))
+	}
+
+	// Check if any expressions were provided
+	if len(expressions) == 0 {
+		log.Printf("no JMESPath expressions provided")
+		return
 	}
 
 	// Create JSMEPathPrincipalMapper

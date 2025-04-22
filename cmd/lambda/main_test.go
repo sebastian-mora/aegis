@@ -44,7 +44,8 @@ func TestLambdaHandler(t *testing.T) {
 
 	// Lambda deps and handler
 	deps := LambdaDeps{
-		Signer: sshSigner,
+		Signer:          sshSigner,
+		PrincipalMapper: &signer.JMESPathPrincipalMapper{Expressions: []string{"email", "name"}},
 	}
 	handler := NewHandler(deps)
 
