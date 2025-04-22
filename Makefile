@@ -1,9 +1,9 @@
 # Variables
 LAMBDA_ENTRY=./cmd/lambda
-CLI_ENTRY=./cmd/userclient
+CLI_ENTRY=./cmd/aegis
 LAMBDA_OUTPUT=build/bootstrap
 LAMBDA_ZIP=build/lambda.zip
-CLI_OUTPUT=build/userclient
+CLI_OUTPUT=build/aegis
 GOOS=linux
 GOARCH=amd64
 
@@ -24,6 +24,11 @@ build-lambda:
 
 ## Build everything (CLI + Lambda)
 build: build-cli build-lambda
+
+## Install CLI binary to ~/.local/bin
+install-cli: build-cli
+	@echo "📦 Installing CLI to ~/.local/bin/aegis"
+	cp $(CLI_OUTPUT) ~/.local/bin/aegis
 
 ## Run `terraform apply`
 deploy-infra:
