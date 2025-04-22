@@ -2,11 +2,7 @@ package signer
 
 import (
 	"crypto/rand"
-	"encoding/base64"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/jmespath/go-jmespath"
@@ -18,7 +14,7 @@ type Signer interface {
 }
 
 type PrincipalMapper interface {
-	Map(token string) ([]string, error)
+	Map(claims map[string]interface{}) ([]string, error)
 }
 
 type SSHCASigner struct {
@@ -70,21 +66,11 @@ type JMESPathPrincipalMapper struct {
 	Expressions []string
 }
 
-func (m *JMESPathPrincipalMapper) Map(token string) ([]string, error) {
-	parts := strings.Split(token, ".")
-	if len(parts) < 2 {
-		return nil, errors.New("invalid token format")
-	}
+func (m *JMESPathPrincipalMapper) Map(claims map[string]interface{}) ([]string, error) {
 
-	// Decode the JWT payload
-	decoded, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return nil, err
-	}
-
-	var claims map[string]interface{}
-	if err := json.Unmarshal(decoded, &claims); err != nil {
-		return nil, err
+	// Check if claims is nil
+	if claims == nil {
+		return nil, fmt.Errorf("claims cannot be nil")
 	}
 
 	seen := make(map[string]struct{})

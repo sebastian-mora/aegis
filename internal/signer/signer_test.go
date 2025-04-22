@@ -102,12 +102,12 @@ func TestJMESPrincipalMapper(t *testing.T) {
 		Expressions: []string{"sub", "email", "groups[*]"},
 	}
 
-	// Generate a mock JWT token with payload
-	payload := `{"sub":"user1","email":"test@test.com", "groups":["group1","group2", "user1"]}`
-	token := generateMockToken(payload)
-
 	expectedPrincipals := []string{"user1", "test@test.com", "group1", "group2"}
-	principals, err := mapper.Map(token)
+	principals, err := mapper.Map(map[string]interface{}{
+		"sub":    "user1",
+		"email":  "test@test.com",
+		"groups": []string{"group1", "group2"},
+	})
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedPrincipals, principals)

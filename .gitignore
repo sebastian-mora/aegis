@@ -4,6 +4,8 @@ build
 *.pub
 *.pem
 
+.vscode
+
 # Local .terraform directories
 **/.terraform/*
 
