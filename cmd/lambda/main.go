@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -21,6 +21,24 @@ type LambdaDeps struct {
 	PrincipalMapper signer.PrincipalMapper
 }
 
+func convertClaimsToInterfaceMap(claims map[string]string) (map[string]interface{}, error) {
+	interfaceClaims := make(map[string]interface{})
+
+	for key, value := range claims {
+		var parsedValue interface{}
+
+		// Try unmarshaling the string value into a generic interface{}
+		if err := json.Unmarshal([]byte(value), &parsedValue); err == nil {
+			interfaceClaims[key] = parsedValue
+		} else {
+			// If unmarshaling fails, treat the value as a plain string
+			interfaceClaims[key] = value
+		}
+	}
+
+	return interfaceClaims, nil
+}
+
 // NewHandler creates a new Lambda handler function
 func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	return func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -33,9 +51,9 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		// for JWT claims, but we need to convert it to map[string]interface{}
 		// to work with the PrincipalMapper
 		stringClaims := event.RequestContext.Authorizer.JWT.Claims
-		interfaceClaims := make(map[string]interface{}, len(stringClaims))
-		for k, v := range stringClaims {
-			interfaceClaims[k] = v
+		interfaceClaims, err := convertClaimsToInterfaceMap(stringClaims)
+		if err != nil {
+			log.Fatalf("Error converting claims: %v", err)
 		}
 
 		// Map the JWT claims to SSH principals
@@ -43,6 +61,11 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		if err != nil {
 			log.Printf("failed to map principals from token: %v", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: "principal mapping failed"}, nil
+		}
+
+		if len(principals) == 0 {
+			log.Printf("no principals found in token")
+			return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: "no principals found"}, nil
 		}
 
 		// Parse the public key from the request body
@@ -98,27 +121,17 @@ func main() {
 	}
 
 	// Load JSME Expressions from environment variable
-	jmesPathExpressions := os.Getenv("JSME_PATH_EXPRESSIONS")
-	if jmesPathExpressions == "" {
-		log.Printf("failed to load JMESPath expressions from environment variable")
-		return
-	}
-
-	// Split the JMESPath expressions into a slice
-	expressions := []string{}
-	for _, expr := range strings.Split(jmesPathExpressions, ",") {
-		expressions = append(expressions, strings.TrimSpace(expr))
-	}
-
-	// Check if any expressions were provided
-	if len(expressions) == 0 {
-		log.Printf("no JMESPath expressions provided")
+	jmesPathExpression := os.Getenv("JSME_PATH_EXPRESSION")
+	if jmesPathExpression == "" {
+		log.Printf("failed to load JMESPath expression from environment variable")
 		return
 	}
 
 	// Create JSMEPathPrincipalMapper
-	principalMapper := &signer.JMESPathPrincipalMapper{
-		Expressions: expressions,
+	principalMapper, err := signer.NewJMESPathPrincipalMapper(jmesPathExpression)
+	if err != nil {
+		log.Printf("failed to create JMESPathPrincipalMapper: %v", err)
+		return
 	}
 
 	// // Initialize the SSH signer

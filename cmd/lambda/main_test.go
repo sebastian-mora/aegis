@@ -42,10 +42,15 @@ func TestLambdaHandler(t *testing.T) {
 	pubkey, _, err := signer.NewSSHKeyPair(signer.ECDSA)
 	assert.NoError(t, err)
 
+	// Create pricipal mapper
+	principalMapper, err := signer.NewJMESPathPrincipalMapper("unix_groups[*]")
+	assert.NoError(t, err)
+	assert.NotNil(t, principalMapper)
+
 	// Lambda deps and handler
 	deps := LambdaDeps{
 		Signer:          sshSigner,
-		PrincipalMapper: &signer.JMESPathPrincipalMapper{Expressions: []string{"email", "name"}},
+		PrincipalMapper: principalMapper,
 	}
 	handler := NewHandler(deps)
 
@@ -55,8 +60,9 @@ func TestLambdaHandler(t *testing.T) {
 			Authorizer: &events.APIGatewayV2HTTPRequestContextAuthorizerDescription{
 				JWT: &events.APIGatewayV2HTTPRequestContextAuthorizerJWTDescription{
 					Claims: map[string]string{
-						"email": "testuser@example.com",
-						"name":  "testuser",
+						"email":       "testuser@example.com",
+						"name":        "testuser",
+						"unix_groups": `["group1", "group2"]`,
 					},
 				},
 			},
@@ -82,6 +88,6 @@ func TestLambdaHandler(t *testing.T) {
 
 	// Verify the certificate
 	assert.Equal(t, sshCert.CertType, uint32(ssh.UserCert))
-	assert.Equal(t, sshCert.ValidPrincipals, []string{"testuser@example.com", "testuser"})
+	assert.Equal(t, sshCert.ValidPrincipals, []string{"group1", "group2"})
 
 }
