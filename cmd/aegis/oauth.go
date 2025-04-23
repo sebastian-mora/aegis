@@ -88,13 +88,23 @@ func SaveToken(path string, token *oauth2.Token) error {
 
 func LoadToken(path string) (*oauth2.Token, error) {
 	data, err := os.ReadFile(path)
+
 	if err != nil {
+		if os.IsNotExist(err) {
+			// No token cached yet
+			return nil, nil
+		}
 		return nil, err
+	}
+
+	// Handle empty file
+	if len(data) == 0 {
+		return nil, nil
 	}
 
 	var token oauth2.Token
 	if err := json.Unmarshal(data, &token); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid token cache: %w", err)
 	}
 
 	return &token, nil
