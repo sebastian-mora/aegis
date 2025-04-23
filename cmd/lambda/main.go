@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -98,27 +97,23 @@ func main() {
 	}
 
 	// Load JSME Expressions from environment variable
-	jmesPathExpressions := os.Getenv("JSME_PATH_EXPRESSIONS")
-	if jmesPathExpressions == "" {
+	jmesPathExpression := os.Getenv("JSME_PATH_EXPRESSION")
+	if jmesPathExpression == "" {
 		log.Printf("failed to load JMESPath expressions from environment variable")
 		return
 	}
 
-	// Split the JMESPath expressions into a slice
-	expressions := []string{}
-	for _, expr := range strings.Split(jmesPathExpressions, ",") {
-		expressions = append(expressions, strings.TrimSpace(expr))
-	}
-
 	// Check if any expressions were provided
-	if len(expressions) == 0 {
+	if len(jmesPathExpression) == 0 {
 		log.Printf("no JMESPath expressions provided")
 		return
 	}
 
 	// Create JSMEPathPrincipalMapper
-	principalMapper := &signer.JMESPathPrincipalMapper{
-		Expressions: expressions,
+	principalMapper, err := signer.NewJMESPathPrincipalMapper(jmesPathExpression)
+	if err != nil {
+		log.Printf("failed to create JMESPathPrincipalMapper: %v", err)
+		return
 	}
 
 	// // Initialize the SSH signer
