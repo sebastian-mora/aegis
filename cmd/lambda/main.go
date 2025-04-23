@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -21,6 +21,21 @@ type LambdaDeps struct {
 	PrincipalMapper signer.PrincipalMapper
 }
 
+func convertClaims(stringClaims map[string]string) map[string]interface{} {
+	interfaceClaims := make(map[string]interface{}, len(stringClaims))
+	for k, v := range stringClaims {
+		// Try to parse JSON value if possible
+		var parsed interface{}
+		if err := json.Unmarshal([]byte(v), &parsed); err == nil {
+			interfaceClaims[k] = parsed
+		} else {
+			// Just a string, store as-is
+			interfaceClaims[k] = v
+		}
+	}
+	return interfaceClaims
+}
+
 // NewHandler creates a new Lambda handler function
 func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	return func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -33,10 +48,7 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		// for JWT claims, but we need to convert it to map[string]interface{}
 		// to work with the PrincipalMapper
 		stringClaims := event.RequestContext.Authorizer.JWT.Claims
-		interfaceClaims := make(map[string]interface{}, len(stringClaims))
-		for k, v := range stringClaims {
-			interfaceClaims[k] = v
-		}
+		interfaceClaims := convertClaims(stringClaims)
 
 		// Map the JWT claims to SSH principals
 		principals, err := deps.PrincipalMapper.Map(interfaceClaims)
@@ -98,27 +110,23 @@ func main() {
 	}
 
 	// Load JSME Expressions from environment variable
-	jmesPathExpressions := os.Getenv("JSME_PATH_EXPRESSIONS")
-	if jmesPathExpressions == "" {
+	jmesPathExpression := os.Getenv("JSME_PATH_EXPRESSION")
+	if jmesPathExpression == "" {
 		log.Printf("failed to load JMESPath expressions from environment variable")
 		return
 	}
 
-	// Split the JMESPath expressions into a slice
-	expressions := []string{}
-	for _, expr := range strings.Split(jmesPathExpressions, ",") {
-		expressions = append(expressions, strings.TrimSpace(expr))
-	}
-
 	// Check if any expressions were provided
-	if len(expressions) == 0 {
+	if len(jmesPathExpression) == 0 {
 		log.Printf("no JMESPath expressions provided")
 		return
 	}
 
 	// Create JSMEPathPrincipalMapper
-	principalMapper := &signer.JMESPathPrincipalMapper{
-		Expressions: expressions,
+	principalMapper, err := signer.NewJMESPathPrincipalMapper(jmesPathExpression)
+	if err != nil {
+		log.Printf("failed to create JMESPathPrincipalMapper: %v", err)
+		return
 	}
 
 	// // Initialize the SSH signer
