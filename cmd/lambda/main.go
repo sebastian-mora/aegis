@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -20,6 +21,21 @@ type LambdaDeps struct {
 	PrincipalMapper signer.PrincipalMapper
 }
 
+func convertClaims(stringClaims map[string]string) map[string]interface{} {
+	interfaceClaims := make(map[string]interface{}, len(stringClaims))
+	for k, v := range stringClaims {
+		// Try to parse JSON value if possible
+		var parsed interface{}
+		if err := json.Unmarshal([]byte(v), &parsed); err == nil {
+			interfaceClaims[k] = parsed
+		} else {
+			// Just a string, store as-is
+			interfaceClaims[k] = v
+		}
+	}
+	return interfaceClaims
+}
+
 // NewHandler creates a new Lambda handler function
 func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	return func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -32,10 +48,7 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		// for JWT claims, but we need to convert it to map[string]interface{}
 		// to work with the PrincipalMapper
 		stringClaims := event.RequestContext.Authorizer.JWT.Claims
-		interfaceClaims := make(map[string]interface{}, len(stringClaims))
-		for k, v := range stringClaims {
-			interfaceClaims[k] = v
-		}
+		interfaceClaims := convertClaims(stringClaims)
 
 		// Map the JWT claims to SSH principals
 		principals, err := deps.PrincipalMapper.Map(interfaceClaims)
