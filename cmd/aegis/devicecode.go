@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/oauth2"
@@ -73,4 +75,27 @@ func ParseAccessToken(idToken string) (*IdTokenClaims, error) {
 	}
 
 	return &claims, nil
+}
+
+func SaveToken(path string, token *oauth2.Token) error {
+	data, err := json.Marshal(token)
+	if err != nil {
+		return err
+	}
+	os.MkdirAll(filepath.Dir(path), 0700)
+	return os.WriteFile(path, data, 0600)
+}
+
+func LoadToken(path string) (*oauth2.Token, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var token oauth2.Token
+	if err := json.Unmarshal(data, &token); err != nil {
+		return nil, err
+	}
+
+	return &token, nil
 }
