@@ -37,3 +37,19 @@ func TestJMESPrincipalMapperFlattenList(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expectedPrincipals, principals)
 }
+func TestJMESPrincipalMapperFlattenList(t *testing.T) {
+	// Create a new JMESPathPrincipalMapper
+	mapper, err := signer.NewJMESPathPrincipalMapper("unix_groups[*]")
+	assert.NoError(t, err)
+	assert.NotNil(t, mapper)
+
+	expectedPrincipals := []string{"group1", "group2"}
+	principals, err := mapper.Map(map[string]interface{}{
+		"sub":         "user1",
+		"email":       "test@test.com",
+		"unix_groups": []string{"group1", "group2"},
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedPrincipals, principals)
+}
