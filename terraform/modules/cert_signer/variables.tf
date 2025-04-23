@@ -24,8 +24,11 @@ variable "user_ca_secret_name" {
   type = string
 }
 
-
 variable "lambda_zip_path" {
   type    = string
   default = "../build/lambda.zip"
+}
+
+variable "jsmepath_expression" {
+  type = string
 }
