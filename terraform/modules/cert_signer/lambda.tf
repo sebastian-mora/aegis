@@ -63,7 +63,8 @@ resource "aws_lambda_function" "ssh_cert_signer" {
 
   environment {
     variables = {
-      USER_CA_KEY_NAME = var.user_ca_secret_name
+      USER_CA_KEY_NAME     = var.user_ca_secret_name
+      JSME_PATH_EXPRESSION = var.jsme_expression
     }
   }
 }

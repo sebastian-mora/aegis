@@ -18,6 +18,11 @@ variable "user_ca_secret_name" {
   default = "aegis-ssh-user-ca"
 }
 
+variable "jsme_expression" {
+  type        = string
+  description = "JSME Path expression that maps OAUTH attributes to SSH Cert Principals"
+}
+
 
 variable "lambda_zip_path" {
   type    = string
