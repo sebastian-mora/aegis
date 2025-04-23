@@ -3,9 +3,18 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/joho/godotenv"
 )
+
+type ClientConfig struct {
+	AuthDomain    string
+	ClientID      string
+	AegisEndpoint string
+	Scope         string
+	KeyOutputPath string
+}
 
 func createAegisConfigDir() error {
 	configDir := os.Getenv("HOME") + "/.config/aegis"
@@ -17,17 +26,27 @@ func createAegisConfigDir() error {
 	return nil
 }
 
-func loadConfig(configPath string) (*ClientConfig, error) {
-	godotenv.Load(configPath)
+func loadConfig() ClientConfig {
 
-	config := &ClientConfig{
-		AuthDomain:    os.Getenv("AUTH_DOMAIN"),
-		ClientID:      os.Getenv("CLIENT_ID"),
-		AegisEndpoint: os.Getenv("AEGIS_ENDPOINT"),
-		Scope:         "openid email profile sign:user_key",
+	// if the config file exists in the config directory, load it
+	configFile := filepath.Join(os.Getenv("HOME"), ".config/aegis", "config")
+	if _, err := os.Stat(configFile); err == nil {
+		godotenv.Load(configFile)
 	}
-	if config.AuthDomain == "" || config.ClientID == "" || config.AegisEndpoint == "" {
-		return nil, fmt.Errorf("missing required environment variables")
+
+	return ClientConfig{
+		AuthDomain:    getEnv("AUTH_DOMAIN", ""),
+		ClientID:      getEnv("CLIENT_ID", ""),
+		AegisEndpoint: getEnv("AEGIS_ENDPOINT", ""),
+		Scope:         getEnv("SCOPE", "openid email profile sign:user_key"),
+		KeyOutputPath: getEnv("KEY_OUTPUT_PATH", filepath.Join(os.Getenv("HOME"), ".ssh")),
 	}
-	return config, nil
+}
+
+// Helper function to get environment variables with a default value
+func getEnv(key, defaultVal string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultVal
 }
