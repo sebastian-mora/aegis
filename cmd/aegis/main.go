@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/sebastian-mora/aegis/internal/devicecode"
 	"github.com/sebastian-mora/aegis/internal/signer"
+	"golang.org/x/oauth2"
 )
 
 type ClientConfig struct {
@@ -111,7 +111,7 @@ func getAccessToken() string {
 		accessToken := string(data)
 
 		// Check if the access token is expired
-		tokenClaims, err := devicecode.ParseAccessToken(accessToken)
+		tokenClaims, err := ParseAccessToken(accessToken)
 		if err != nil {
 			fatal("Failed to parse access token: %v", err)
 		}
@@ -125,25 +125,25 @@ func getAccessToken() string {
 }
 
 func authenticateUser() string {
-	// If the access token file doesn't exist or it's expired, initiate device code authentication
-	deviceCodeClient := devicecode.NewDeviceCodeAuthentik(config.AuthDomain, config.ClientID, config.Scope)
-	oauthResp, err := deviceCodeClient.RequestDeviceCode()
-	if err != nil {
-		fatal("Failed to initiate device code request: %v", err)
+
+	// Create a new OAuth2 config
+	oauthConfig := &oauth2.Config{
+		ClientID: config.ClientID,
+		Endpoint: oauth2.Endpoint{
+			DeviceAuthURL: config.AuthDomain + "/application/o/device/",
+			TokenURL:      config.AuthDomain + "/application/o/token/",
+		},
+		Scopes: []string{config.Scope},
 	}
 
-	fmt.Printf("📲 To authenticate, visit: %s\n", oauthResp.VerfificationURI)
-	fmt.Println("\tWaiting for login...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(oauthResp.ExpiresIn)*time.Second)
-	defer cancel()
-
-	tokenResp, err := deviceCodeClient.PollDeviceCode(ctx, *oauthResp)
+	// Request a token
+	ctx := context.Background()
+	token, err := RequestDeviceCode(ctx, oauthConfig)
 	if err != nil {
-		fatal("❌ Authentication failed: %v", err)
+		fatal("Failed to request device code: %v", err)
 	}
 
-	return tokenResp.AccessToken
+	return token.AccessToken
 }
 
 func saveKeyPair(pubKey, signedPubKey, privKey string) {
@@ -191,7 +191,7 @@ func main() {
 		accessToken = authenticateUser()
 	}
 
-	tokenClaims, _ := devicecode.ParseAccessToken(accessToken)
+	tokenClaims, _ := ParseAccessToken(accessToken)
 	fmt.Printf("👤 User authenticated: %s\n", tokenClaims.Name)
 
 	// Generate a new Ed25519 key pair
