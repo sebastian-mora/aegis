@@ -11,7 +11,24 @@ type PrincipalMapper interface {
 }
 
 type JMESPathPrincipalMapper struct {
-	Exp *jmespath.JMESPath
+	JMESPath *jmespath.JMESPath
+}
+
+func NewJMESPathPrincipalMapper(expression string) (*JMESPathPrincipalMapper, error) {
+
+	// Check if the expression is empty
+	if expression == "" {
+		return nil, fmt.Errorf("expression cannot be empty")
+	}
+
+	path, err := jmespath.Compile(expression)
+	if err != nil {
+		return nil, fmt.Errorf("invalid JMESPath expression: %w", err)
+	}
+
+	return &JMESPathPrincipalMapper{
+		JMESPath: path,
+	}, nil
 }
 
 func NewJMESPathPrincipalMapper(expression string) (*JMESPathPrincipalMapper, error) {
@@ -47,6 +64,11 @@ func (m *JMESPathPrincipalMapper) Map(claims interface{}) ([]string, error) {
 	seen := make(map[string]struct{})
 	var principals []string
 
+	result, err := m.JMESPath.Search(claims)
+	if err != nil {
+		return nil, err
+	}
+
 	switch v := result.(type) {
 	case string:
 		if _, exists := seen[v]; !exists {
@@ -55,13 +77,11 @@ func (m *JMESPathPrincipalMapper) Map(claims interface{}) ([]string, error) {
 		}
 	case []interface{}:
 		for _, item := range v {
-			s, ok := item.(string)
-			if !ok {
-				continue
-			}
-			if _, exists := seen[s]; !exists {
-				seen[s] = struct{}{}
-				principals = append(principals, s)
+			if s, ok := item.(string); ok {
+				if _, exists := seen[s]; !exists {
+					seen[s] = struct{}{}
+					principals = append(principals, s)
+				}
 			}
 		}
 	default:
