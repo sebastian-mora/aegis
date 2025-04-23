@@ -21,19 +21,22 @@ type LambdaDeps struct {
 	PrincipalMapper signer.PrincipalMapper
 }
 
-func convertClaims(stringClaims map[string]string) map[string]interface{} {
-	interfaceClaims := make(map[string]interface{}, len(stringClaims))
-	for k, v := range stringClaims {
-		// Try to parse JSON value if possible
-		var parsed interface{}
-		if err := json.Unmarshal([]byte(v), &parsed); err == nil {
-			interfaceClaims[k] = parsed
+func convertClaimsToInterfaceMap(claims map[string]string) (map[string]interface{}, error) {
+	interfaceClaims := make(map[string]interface{})
+
+	for key, value := range claims {
+		var parsedValue interface{}
+
+		// Try unmarshaling the string value into a generic interface{}
+		if err := json.Unmarshal([]byte(value), &parsedValue); err == nil {
+			interfaceClaims[key] = parsedValue
 		} else {
-			// Just a string, store as-is
-			interfaceClaims[k] = v
+			// If unmarshaling fails, treat the value as a plain string
+			interfaceClaims[key] = value
 		}
 	}
-	return interfaceClaims
+
+	return interfaceClaims, nil
 }
 
 // NewHandler creates a new Lambda handler function
@@ -48,13 +51,21 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		// for JWT claims, but we need to convert it to map[string]interface{}
 		// to work with the PrincipalMapper
 		stringClaims := event.RequestContext.Authorizer.JWT.Claims
-		interfaceClaims := convertClaims(stringClaims)
+		interfaceClaims, err := convertClaimsToInterfaceMap(stringClaims)
+		if err != nil {
+			log.Fatalf("Error converting claims: %v", err)
+		}
 
 		// Map the JWT claims to SSH principals
 		principals, err := deps.PrincipalMapper.Map(interfaceClaims)
 		if err != nil {
 			log.Printf("failed to map principals from token: %v", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: "principal mapping failed"}, nil
+		}
+
+		if len(principals) == 0 {
+			log.Printf("no principals found in token")
+			return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: "no principals found"}, nil
 		}
 
 		// Parse the public key from the request body
@@ -112,13 +123,7 @@ func main() {
 	// Load JSME Expressions from environment variable
 	jmesPathExpression := os.Getenv("JSME_PATH_EXPRESSION")
 	if jmesPathExpression == "" {
-		log.Printf("failed to load JMESPath expressions from environment variable")
-		return
-	}
-
-	// Check if any expressions were provided
-	if len(jmesPathExpression) == 0 {
-		log.Printf("no JMESPath expressions provided")
+		log.Printf("failed to load JMESPath expression from environment variable")
 		return
 	}
 

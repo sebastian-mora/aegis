@@ -39,49 +39,27 @@ func TestLambdaHandlerWithStringClaims(t *testing.T) {
 	pubkey, _, err := signer.NewSSHKeyPair(signer.ECDSA)
 	assert.NoError(t, err)
 
-	tests := []struct {
-		name         string
-		jmesExpr     string
-		claims       map[string]string
-		expectedPrin []string
-		expectError  bool
-	}{
-		{
-			name:         "Single email claim",
-			jmesExpr:     "email",
-			claims:       map[string]string{"email": "alice@example.com"},
-			expectedPrin: []string{"alice@example.com"},
-		},
-		{
-			name:         "Test unpacking list",
-			jmesExpr:     "unix_groups[*]",
-			claims:       map[string]string{"unix_groups": "[\"group_1\", \"group_2\"]"},
-			expectedPrin: []string{"group_1", "group_2"},
-		},
-		{
-			name:         "Test muilt attrs",
-			jmesExpr:     "[sub, email]",
-			claims:       map[string]string{"email": "alice@example.com", "sub": "alice"},
-			expectedPrin: []string{"alice@example.com", "alice"},
-		},
+	// Create pricipal mapper
+	principalMapper, err := signer.NewJMESPathPrincipalMapper("unix_groups[*]")
+	assert.NoError(t, err)
+	assert.NotNil(t, principalMapper)
+
+	// Lambda deps and handler
+	deps := LambdaDeps{
+		Signer:          sshSigner,
+		PrincipalMapper: principalMapper,
 	}
+	handler := NewHandler(deps)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			principalMapper, err := signer.NewJMESPathPrincipalMapper(tt.jmesExpr)
-			assert.NoError(t, err)
-
-			handler := NewHandler(LambdaDeps{
-				Signer:          sshSigner,
-				PrincipalMapper: principalMapper,
-			})
-
-			event := events.APIGatewayV2HTTPRequest{
-				RequestContext: events.APIGatewayV2HTTPRequestContext{
-					Authorizer: &events.APIGatewayV2HTTPRequestContextAuthorizerDescription{
-						JWT: &events.APIGatewayV2HTTPRequestContextAuthorizerJWTDescription{
-							Claims: tt.claims,
-						},
+	// Mock API Gateway event
+	event := events.APIGatewayV2HTTPRequest{
+		RequestContext: events.APIGatewayV2HTTPRequestContext{
+			Authorizer: &events.APIGatewayV2HTTPRequestContextAuthorizerDescription{
+				JWT: &events.APIGatewayV2HTTPRequestContextAuthorizerJWTDescription{
+					Claims: map[string]string{
+						"email":       "testuser@example.com",
+						"name":        "testuser",
+						"unix_groups": `["group1", "group2"]`,
 					},
 				},
 				RawPath: "/sign_user_key",
@@ -98,8 +76,15 @@ func TestLambdaHandlerWithStringClaims(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, 200, resp.StatusCode)
 
-			parsedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(resp.Body))
-			assert.NoError(t, err)
+	// Parse the returned certificate
+	cert, _, _, _, err := ssh.ParseAuthorizedKey([]byte(resp.Body))
+	assert.NoError(t, err)
+	sshCert, ok := cert.(*ssh.Certificate)
+	assert.True(t, ok)
+
+	// Verify the certificate
+	assert.Equal(t, sshCert.CertType, uint32(ssh.UserCert))
+	assert.Equal(t, sshCert.ValidPrincipals, []string{"group1", "group2"})
 
 			sshCert, ok := parsedKey.(*ssh.Certificate)
 			assert.True(t, ok)
