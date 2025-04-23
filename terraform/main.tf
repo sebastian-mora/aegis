@@ -7,6 +7,7 @@ module "aeige_cert_signer" {
 
   // lambda vars
   user_ca_secret_name = var.user_ca_secret_name
+  jsmepath_expression = var.jmes_expression
   lambda_zip_path     = var.lambda_zip_path
 }
 
