@@ -9,15 +9,31 @@ import (
 
 func TestJMESPrincipalMapper(t *testing.T) {
 	// Create a new JMESPathPrincipalMapper
-	mapper := &signer.JMESPathPrincipalMapper{
-		Expressions: []string{"sub", "email", "groups[*]"},
-	}
+	mapper, err := signer.NewJMESPathPrincipalMapper("sub")
+	assert.NoError(t, err)
+	assert.NotNil(t, mapper)
 
-	expectedPrincipals := []string{"user1", "test@test.com", "group1", "group2"}
+	expectedPrincipals := []string{"user1"}
 	principals, err := mapper.Map(map[string]interface{}{
 		"sub":    "user1",
 		"email":  "test@test.com",
 		"groups": []string{"group1", "group2"},
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedPrincipals, principals)
+}
+func TestJMESPrincipalMapperFlattenList(t *testing.T) {
+	// Create a new JMESPathPrincipalMapper
+	mapper, err := signer.NewJMESPathPrincipalMapper("unix_groups[*]")
+	assert.NoError(t, err)
+	assert.NotNil(t, mapper)
+
+	expectedPrincipals := []string{"group1", "group2"}
+	principals, err := mapper.Map(map[string]interface{}{
+		"sub":         "user1",
+		"email":       "test@test.com",
+		"unix_groups": []string{"group1", "group2"},
 	})
 
 	assert.NoError(t, err)
