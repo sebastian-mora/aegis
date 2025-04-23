@@ -1,0 +1,74 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+)
+
+type AuditWriter interface {
+	Write(event KeySignEvent) error
+}
+
+type KeySignEvent struct {
+	ID          string    // Timestamp + SUB
+	SignedAt    time.Time // Timestamp of the signing event
+	PublicKey   string    // Original public key
+	Certificate string    // Signed certificate
+	Principals  []string  // List of SSH principals
+	SourceIp    string    // IP address where the request came from
+	UserAgent   string    // Optional: User agent of the requestor
+	Sub         string    // Subject (user ID)
+	Aud         string    // Audience (who this was issued for)
+	ExpiresAt   int64     // Optional: for TTL
+}
+
+type DynamoClient interface {
+	PutItem(ctx context.Context, input *dynamodb.PutItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
+}
+
+type DynamoAuditStore struct {
+	Client    DynamoClient
+	TableName string
+}
+
+func (store *DynamoAuditStore) Write(event KeySignEvent) error {
+
+	// create event id
+	event.ID = GenerateID(event.SignedAt, event.Sub)
+
+	item := map[string]types.AttributeValue{
+		"ID":          &types.AttributeValueMemberS{Value: event.ID},
+		"SignedAt":    &types.AttributeValueMemberS{Value: event.SignedAt.Format(time.RFC3339)},
+		"PublicKey":   &types.AttributeValueMemberS{Value: event.PublicKey},
+		"Certificate": &types.AttributeValueMemberS{Value: event.Certificate},
+		"SourceIp":    &types.AttributeValueMemberS{Value: event.SourceIp},
+		"Sub":         &types.AttributeValueMemberS{Value: event.Sub},
+		"Aud":         &types.AttributeValueMemberS{Value: event.Aud},
+		"ExpiresAt":   &types.AttributeValueMemberS{Value: aws.ToString(aws.String(string(rune(event.ExpiresAt))))},
+		"UserAgent":   &types.AttributeValueMemberS{Value: event.UserAgent},
+	}
+
+	if len(event.Principals) > 0 {
+		principals := make([]types.AttributeValue, len(event.Principals))
+		for i, p := range event.Principals {
+			principals[i] = &types.AttributeValueMemberS{Value: p}
+		}
+		item["Principals"] = &types.AttributeValueMemberL{Value: principals}
+	}
+
+	_, err := store.Client.PutItem(context.TODO(), &dynamodb.PutItemInput{
+		TableName: aws.String(store.TableName),
+		Item:      item,
+	})
+	return err
+}
+
+func GenerateID(signedAt time.Time, sub string) string {
+	timestamp := signedAt.UTC().Format(time.RFC3339)
+	return fmt.Sprintf("%s-%s", sub, timestamp)
+}
