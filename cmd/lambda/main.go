@@ -73,6 +73,20 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 
 		// Return the SSH certificate in response
 		certString := string(ssh.MarshalAuthorizedKey(userSSHCert))
+
+		// Write event to audit trail
+		keySignEvent := KeySignEvent{
+			SignedAt:    time.Now().UTC(),
+			PublicKey:   string(pubKey.Marshal()),
+			Certificate: certString,
+			Principals:  principals,
+			SourceIp:    event.Headers["SourceIp"],
+			UserAgent:   event.Headers["UserAgent"],
+			Sub:         event.RequestContext.Authorizer.JWT.Claims["Sub"],
+			Aud:         event.RequestContext.Authorizer.JWT.Claims["Aud"],
+			ExpiresAt:   int64(certificateExpiration),
+		}
+
 		return events.APIGatewayV2HTTPResponse{
 			StatusCode: 200,
 			Body:       certString,
