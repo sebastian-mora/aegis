@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/joho/godotenv"
 	"github.com/sebastian-mora/aegis/internal/signer"
 	"golang.org/x/oauth2"
 )
@@ -37,7 +36,7 @@ func init() {
 	flag.StringVar(&clientIDFlag, "client-id", "", "Client ID for the authentication server")
 	flag.StringVar(&aegisEndpointFlag, "aegis-endpoint", "", "Aegis endpoint")
 	flag.BoolVar(&verboseFlag, "verbose", false, "Enable verbose output")
-	flag.StringVar(&configPathFlag, "config", filepath.Join(os.Getenv("HOME"), ".ssh", "aegis_config"), "Path to the configuration file")
+	flag.StringVar(&configPathFlag, "config", filepath.Join(os.Getenv("HOME"), ".config/aegis", "config"), "Path to the configuration file")
 	flag.StringVar(&keyOutputPathFlag, "key-output-path", filepath.Join(os.Getenv("HOME"), ".ssh"), "Path to save the generated keys")
 	flag.Parse()
 
@@ -68,21 +67,6 @@ func init() {
 	if config.AuthDomain == "" || config.ClientID == "" || config.AegisEndpoint == "" {
 		fatal("Missing required configuration values. Please provide them via flags or in the config file.")
 	}
-}
-
-func loadConfig(configPath string) (*ClientConfig, error) {
-	godotenv.Load(configPath)
-
-	config := &ClientConfig{
-		AuthDomain:    os.Getenv("AUTH_DOMAIN"),
-		ClientID:      os.Getenv("CLIENT_ID"),
-		AegisEndpoint: os.Getenv("AEGIS_ENDPOINT"),
-		Scope:         "openid email profile sign:user_key",
-	}
-	if config.AuthDomain == "" || config.ClientID == "" || config.AegisEndpoint == "" {
-		return nil, fmt.Errorf("missing required environment variables")
-	}
-	return config, nil
 }
 
 func WriteKeyToFile(name, key string) error {
@@ -183,6 +167,11 @@ func saveAccessToken(accessToken string) {
 
 func main() {
 	fmt.Println("🔐 Aegis Signer CLI")
+
+	// Create the config directory if it doesn't exist
+	if err := createAegisConfigDir(); err != nil {
+		fatal("Failed to create config directory: %v", err)
+	}
 
 	// Get or authenticate the user to get an access token
 	accessToken := getAccessToken()
