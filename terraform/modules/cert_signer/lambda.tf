@@ -81,6 +81,7 @@ resource "aws_lambda_function" "ssh_cert_signer" {
     variables = {
       USER_CA_KEY_NAME     = var.user_ca_secret_name
       JSME_PATH_EXPRESSION = var.jsme_expression
+      DYNAMO_DB_TABLE = aws_dynamodb_table.audit_table.name
     }
   }
 }
