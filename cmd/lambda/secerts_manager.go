@@ -1,16 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 )
 
-func GetSecretFromSecretsManager(sess *session.Session, secretName string) (string, error) {
-	svc := secretsmanager.New(sess)
-	out, err := svc.GetSecretValue(&secretsmanager.GetSecretValueInput{
-		SecretId: &secretName,
+func GetSecretFromSecretsManager(ctx context.Context, cfg aws.Config, secretName string) (string, error) {
+	svc := secretsmanager.NewFromConfig(cfg)
+
+	out, err := svc.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
+		SecretId: aws.String(secretName),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to retrieve secret %s: %w", secretName, err)
@@ -20,5 +22,5 @@ func GetSecretFromSecretsManager(sess *session.Session, secretName string) (stri
 		return "", fmt.Errorf("secret %s has no SecretString", secretName)
 	}
 
-	return string(*out.SecretString), nil
+	return *out.SecretString, nil
 }

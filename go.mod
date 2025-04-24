@@ -27,10 +27,10 @@ require (
 )
 
 require (
-	github.com/aws/aws-sdk-go v1.55.6
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.14
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.42.4
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.35.4
 	github.com/joho/godotenv v1.5.1
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/oauth2 v0.29.0
