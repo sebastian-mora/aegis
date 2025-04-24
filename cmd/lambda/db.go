@@ -24,7 +24,7 @@ type KeySignEvent struct {
 	UserAgent   string    // Optional: User agent of the requestor
 	Sub         string    // Subject (user ID)
 	Aud         string    // Audience (who this was issued for)
-	ExpiresAt   int64     // Optional: for TTL
+	ExpiresAt   time.Time // Optional: for TTL
 }
 
 type DynamoClient interface {
@@ -59,7 +59,7 @@ func (store *DynamoAuditStore) Write(event KeySignEvent) error {
 		"SourceIp":    &types.AttributeValueMemberS{Value: event.SourceIp},
 		"Sub":         &types.AttributeValueMemberS{Value: event.Sub},
 		"Aud":         &types.AttributeValueMemberS{Value: event.Aud},
-		"ExpiresAt":   &types.AttributeValueMemberS{Value: aws.ToString(aws.String(string(rune(event.ExpiresAt))))},
+		"ExpiresAt":   &types.AttributeValueMemberS{Value: event.ExpiresAt.Format(time.RFC3339)},
 		"UserAgent":   &types.AttributeValueMemberS{Value: event.UserAgent},
 	}
 

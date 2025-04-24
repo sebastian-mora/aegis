@@ -49,7 +49,7 @@ func TestWriteAuditEvent(t *testing.T) {
 		UserAgent:   "curl/7.79.1",
 		Sub:         "test-user",
 		Aud:         "service-x",
-		ExpiresAt:   time.Now().Add(1 * time.Hour).Unix(),
+		ExpiresAt:   time.Now().Add(time.Hour * 12),
 	}
 
 	err := store.Write(event)

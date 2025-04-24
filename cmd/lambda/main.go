@@ -77,18 +77,19 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		// Write event to audit trail
 		keySignEvent := KeySignEvent{
 			SignedAt:    time.Now().UTC(),
-			PublicKey:   string(pubKey.Marshal()),
+			PublicKey:   string(ssh.MarshalAuthorizedKey(pubKey)),
 			Certificate: certString,
 			Principals:  principals,
-			SourceIp:    event.Headers["SourceIp"],
-			UserAgent:   event.Headers["UserAgent"],
-			Sub:         event.RequestContext.Authorizer.JWT.Claims["Sub"],
-			Aud:         event.RequestContext.Authorizer.JWT.Claims["Aud"],
-			ExpiresAt:   int64(certificateExpiration),
+			SourceIp:    event.RequestContext.HTTP.SourceIP,
+			UserAgent:   event.RequestContext.HTTP.UserAgent,
+			Sub:         event.RequestContext.Authorizer.JWT.Claims["sub"],
+			Aud:         event.RequestContext.Authorizer.JWT.Claims["aud"],
+			ExpiresAt:   time.Unix(int64(userSSHCert.ValidBefore), 0).UTC(),
 		}
 
 		if err := deps.AuditRepo.Write(keySignEvent); err != nil {
 			slog.Error("Failed to write audit log", "error", err)
+			slog.Info("Audit Event", "data", keySignEvent)
 		}
 
 		return events.APIGatewayV2HTTPResponse{
