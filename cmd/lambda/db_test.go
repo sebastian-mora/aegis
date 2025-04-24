@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Mock for the DynamoDB client interface
@@ -35,35 +35,23 @@ func TestGenerateID(t *testing.T) {
 }
 
 func TestWriteAuditEvent(t *testing.T) {
+	signedAt := time.Now()
+	expectedID := GenerateID(signedAt, "test-user")
 
-	signedAt := time.Now().UTC()
+	var actualInput *dynamodb.PutItemInput
 
 	mockClient := &mockDynamoClient{
 		PutItemFunc: func(ctx context.Context, input *dynamodb.PutItemInput, optFns ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
-
-			assert.NotNil(t, input)
-			assert.Equal(t, "audit-table", *input.TableName)
-
-			// Check the fields in the item map
-			assert.Contains(t, input.Item, "ID")
-			assert.Contains(t, input.Item, "SignedAt")
-			assert.Equal(t, &types.AttributeValueMemberS{Value: "test-user"}, input.Item["Sub"])
-
-			// Assert the id is generated correctly
-			assert.Equal(t, input.Item["ID"], fmt.Sprintf("%s-%s", signedAt, input.Item["Sub"]))
-
-			// Return mock output
+			actualInput = input
 			return &dynamodb.PutItemOutput{}, nil
 		},
 	}
 
-	// Create the DynamoAuditStore with the mock client
 	store := &DynamoAuditStore{
 		Client:    mockClient,
 		TableName: "audit-table",
 	}
 
-	// Define an audit event for testing
 	event := KeySignEvent{
 		SignedAt:    signedAt,
 		PublicKey:   "ssh-ed25519 AAA...",
@@ -78,4 +66,16 @@ func TestWriteAuditEvent(t *testing.T) {
 
 	err := store.Write(event)
 	assert.NoError(t, err)
+
+	require.NotNil(t, actualInput)
+	assert.Equal(t, "audit-table", *actualInput.TableName)
+	assert.Contains(t, actualInput.Item, "ID")
+	assert.Contains(t, actualInput.Item, "SignedAt")
+
+	// Check ID value
+	assert.Equal(t, &types.AttributeValueMemberS{Value: expectedID}, actualInput.Item["ID"])
+
+	// Check some key fields
+	assert.Equal(t, &types.AttributeValueMemberS{Value: "test-user"}, actualInput.Item["Sub"])
+	assert.Equal(t, &types.AttributeValueMemberS{Value: "ssh-ed25519 AAA..."}, actualInput.Item["PublicKey"])
 }
