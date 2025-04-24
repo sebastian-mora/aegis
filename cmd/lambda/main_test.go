@@ -28,6 +28,21 @@ func generateSSHKey() (*rsa.PrivateKey, *ssh.PublicKey, error) {
 	return privateKey, &publicKey, nil
 }
 
+func setupHandler(jsmeExpression string) func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	caPrivateKey, _, _ := generateSSHKey()
+	caCertSigner, _ := ssh.NewSignerFromKey(caPrivateKey)
+
+	sshSigner := signer.NewSSHCASigner(caCertSigner)
+
+	principalMapper, _ := signer.NewJMESPathPrincipalMapper(jsmeExpression)
+
+	return NewHandler(LambdaDeps{
+		Signer:          sshSigner,
+		PrincipalMapper: principalMapper,
+		AuditRepo:       &MockAuditRepo{},
+	})
+}
+
 type MockAuditRepo struct{}
 
 func (a *MockAuditRepo) Write(event KeySignEvent) error {
@@ -35,12 +50,6 @@ func (a *MockAuditRepo) Write(event KeySignEvent) error {
 }
 
 func TestLambdaHandlerWithStringClaims(t *testing.T) {
-	// Shared setup
-	caPrivateKey, _, err := generateSSHKey()
-	assert.NoError(t, err)
-	caCertSigner, err := ssh.NewSignerFromKey(caPrivateKey)
-	assert.NoError(t, err)
-	sshSigner := signer.NewSSHCASigner(caCertSigner)
 
 	pubkey, _, err := signer.NewSSHKeyPair(signer.ECDSA)
 	assert.NoError(t, err)
@@ -74,14 +83,8 @@ func TestLambdaHandlerWithStringClaims(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			principalMapper, err := signer.NewJMESPathPrincipalMapper(tt.jmesExpr)
-			assert.NoError(t, err)
 
-			handler := NewHandler(LambdaDeps{
-				Signer:          sshSigner,
-				PrincipalMapper: principalMapper,
-				AuditRepo:       &MockAuditRepo{},
-			})
+			handler := setupHandler(tt.jmesExpr)
 
 			event := events.APIGatewayV2HTTPRequest{
 				RequestContext: events.APIGatewayV2HTTPRequestContext{
@@ -113,4 +116,32 @@ func TestLambdaHandlerWithStringClaims(t *testing.T) {
 			assert.ElementsMatch(t, tt.expectedPrin, sshCert.ValidPrincipals)
 		})
 	}
+}
+
+func TestLambdaHandlerWithNoMatchingClaims(t *testing.T) {
+
+	pubkey, _, err := signer.NewSSHKeyPair(signer.ECDSA)
+	assert.NoError(t, err)
+
+	handler := setupHandler("[]")
+
+	event := events.APIGatewayV2HTTPRequest{
+		RequestContext: events.APIGatewayV2HTTPRequestContext{
+			Authorizer: &events.APIGatewayV2HTTPRequestContextAuthorizerDescription{
+				JWT: &events.APIGatewayV2HTTPRequestContextAuthorizerJWTDescription{
+					Claims: map[string]string{"user": "test123"},
+				},
+			},
+		},
+		RawPath: "/sign_user_key",
+		Body:    pubkey,
+	}
+
+	resp, err := handler(context.Background(), event)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+
+	assert.Equal(t, "no principals matched on auth token", resp.Body)
+
 }

@@ -54,8 +54,8 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		// Map the JWT claims to SSH principals
 		principals, err := deps.PrincipalMapper.Map(interfaceClaims)
 		if err != nil {
-			slog.Error("failed to map principals from token", "error", err)
-			return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: "principal mapping failed"}, nil
+			slog.Info("No principals matched from token, no cert generated", "error", err)
+			return events.APIGatewayV2HTTPResponse{StatusCode: 200, Body: "no principals matched on auth token"}, nil
 		}
 
 		// Parse the public key from the request body
