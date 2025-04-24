@@ -5,7 +5,7 @@ variable "region" {
 
 variable "profile" {
   default = "default"
-  type = string
+  type    = string
 }
 
 variable "jwt_audience" {
