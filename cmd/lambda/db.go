@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -53,11 +52,7 @@ func NewDynamoDbAuditStore(tableName string) (*DynamoAuditStore, error) {
 
 func (store *DynamoAuditStore) Write(event KeySignEvent) error {
 
-	// create event id
-	event.ID = GenerateID(event.SignedAt, event.Sub)
-
 	item := map[string]types.AttributeValue{
-		"ID":          &types.AttributeValueMemberS{Value: event.ID},
 		"SignedAt":    &types.AttributeValueMemberS{Value: event.SignedAt.Format(time.RFC3339)},
 		"PublicKey":   &types.AttributeValueMemberS{Value: event.PublicKey},
 		"Certificate": &types.AttributeValueMemberS{Value: event.Certificate},
@@ -81,9 +76,4 @@ func (store *DynamoAuditStore) Write(event KeySignEvent) error {
 		Item:      item,
 	})
 	return err
-}
-
-func GenerateID(signedAt time.Time, sub string) string {
-	timestamp := signedAt.UTC().Format(time.RFC3339)
-	return fmt.Sprintf("%s-%s", sub, timestamp)
 }

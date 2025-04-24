@@ -23,20 +23,8 @@ func (m *mockDynamoClient) PutItem(ctx context.Context, input *dynamodb.PutItemI
 	return &dynamodb.PutItemOutput{}, nil
 }
 
-func TestGenerateID(t *testing.T) {
-	sub := "ruse"
-	signedAt := time.Now().UTC()
-	timestamp := signedAt.UTC().Format(time.RFC3339)
-
-	expected := sub + "-" + timestamp
-
-	assert.Equal(t, expected, GenerateID(signedAt, sub))
-
-}
-
 func TestWriteAuditEvent(t *testing.T) {
 	signedAt := time.Now()
-	expectedID := GenerateID(signedAt, "test-user")
 
 	var actualInput *dynamodb.PutItemInput
 
@@ -69,11 +57,7 @@ func TestWriteAuditEvent(t *testing.T) {
 
 	require.NotNil(t, actualInput)
 	assert.Equal(t, "audit-table", *actualInput.TableName)
-	assert.Contains(t, actualInput.Item, "ID")
 	assert.Contains(t, actualInput.Item, "SignedAt")
-
-	// Check ID value
-	assert.Equal(t, &types.AttributeValueMemberS{Value: expectedID}, actualInput.Item["ID"])
 
 	// Check some key fields
 	assert.Equal(t, &types.AttributeValueMemberS{Value: "test-user"}, actualInput.Item["Sub"])
