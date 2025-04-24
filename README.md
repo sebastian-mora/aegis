@@ -4,6 +4,8 @@ Aegis is a serverless SSH certificate authority built on AWS Lambda that simplif
 
 Clients authenticate using the OIDC Device Authorization Flow. After successful authentication, the user's public key is sent to the Aegis API for signing. The signing function uses the OIDC ID token to map user attributes (e.g., email) to the SSH certificate's principal field.
 
+All signing actions are recorded in an audit trail stored in DynamoDB, enabling traceability and accountability for each certificate issued.
+
 This system provides short-term credentials and simplifies user management, making it easier to control access and minimize long-term key usage.
 
 ---

@@ -28,6 +28,12 @@ func generateSSHKey() (*rsa.PrivateKey, *ssh.PublicKey, error) {
 	return privateKey, &publicKey, nil
 }
 
+type MockAuditRepo struct{}
+
+func (a *MockAuditRepo) Write(event KeySignEvent) error {
+	return nil
+}
+
 func TestLambdaHandlerWithStringClaims(t *testing.T) {
 	// Shared setup
 	caPrivateKey, _, err := generateSSHKey()
@@ -74,6 +80,7 @@ func TestLambdaHandlerWithStringClaims(t *testing.T) {
 			handler := NewHandler(LambdaDeps{
 				Signer:          sshSigner,
 				PrincipalMapper: principalMapper,
+				AuditRepo:       &MockAuditRepo{},
 			})
 
 			event := events.APIGatewayV2HTTPRequest{
