@@ -1,3 +1,8 @@
+provider "aws" {   
+	region = var.region
+  profile = var.profile
+}
+
 module "aeige_cert_signer" {
   source       = "./modules/cert_signer"
   api_name     = "aegis"
