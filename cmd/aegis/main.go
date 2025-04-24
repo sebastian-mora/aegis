@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/sebastian-mora/aegis/internal/signer"
 	"golang.org/x/oauth2"
@@ -136,7 +137,9 @@ func main() {
 	if err != nil {
 		fatal("Failed to load access token: %v", err)
 	}
-	if oauthToken == nil {
+
+	// If we failed to load a cached token or it's expired, reauth
+	if oauthToken == nil || oauthToken.Expiry.Before(time.Now()) {
 		oauthToken = authenticateUser()
 		if err := SaveToken(configPathFlag+"/token.json", oauthToken); err != nil {
 			fatal("Failed to save access token: %v", err)
