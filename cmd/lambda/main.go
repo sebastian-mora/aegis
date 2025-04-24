@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"log/slog"
 	"os"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/sebastian-mora/aegis/internal/signer"
 	"golang.org/x/crypto/ssh"
 )
@@ -111,14 +112,14 @@ func main() {
 	dynamoDbTableName := os.Getenv("DYNAMO_DB_TABLE")
 
 	// Create a new AWS session
-	sess, err := session.NewSession()
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
-		slog.Error("failed to create AWS session", "error", err)
-		return
+		log.Fatalf("unable to load AWS config: %v", err)
 	}
 
 	// Load the certificate signer from AWS Secrets Manager
-	caCert, err := GetSecretFromSecretsManager(sess, secret_name)
+	caCert, err := GetSecretFromSecretsManager(ctx, cfg, secret_name)
 	if err != nil {
 		slog.Error("failed to load cert signer", "error", err)
 		return
