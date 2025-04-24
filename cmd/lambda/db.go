@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
@@ -34,6 +35,20 @@ type DynamoClient interface {
 type DynamoAuditStore struct {
 	Client    DynamoClient
 	TableName string
+}
+
+func NewDynamoDbAuditStore(tableName string) (*DynamoAuditStore, error) {
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+
+	dbClient := dynamodb.NewFromConfig(cfg)
+
+	return &DynamoAuditStore{
+		Client:    dbClient,
+		TableName: tableName,
+	}, nil
 }
 
 func (store *DynamoAuditStore) Write(event KeySignEvent) error {
