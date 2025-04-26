@@ -24,6 +24,8 @@ type LambdaDeps struct {
 	AuditRepo       AuditWriter
 }
 
+// This custom parsing is required due to a bug in the lambda-events SDK
+// Tracking issue:  https://github.com/aws/aws-lambda-go/issues/570
 func ParseJWTClaims(tokenString string) (map[string]interface{}, error) {
 	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
 	if err != nil {
