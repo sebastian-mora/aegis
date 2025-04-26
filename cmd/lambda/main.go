@@ -58,6 +58,8 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 			return events.APIGatewayV2HTTPResponse{StatusCode: 200, Body: "no principals matched on auth token"}, nil
 		}
 
+		slog.Info("mapped principals from token claims", "principals", principals)
+
 		// Parse the public key from the request body
 		pubKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(event.Body))
 		if err != nil {
@@ -71,6 +73,8 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 			slog.Error("failed to sign certificate", "error", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: "failed to sign certificate"}, nil
 		}
+
+		slog.Info("ssh key signed", "principals", principals, "ttl", certificateExpiration.String())
 
 		// Return the SSH certificate in response
 		certString := string(ssh.MarshalAuthorizedKey(userSSHCert))
@@ -87,6 +91,8 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 			Aud:         event.RequestContext.Authorizer.JWT.Claims["aud"],
 			ExpiresAt:   time.Unix(int64(userSSHCert.ValidBefore), 0).UTC(),
 		}
+
+		slog.Info("audit event saved")
 
 		if err := deps.AuditRepo.Write(keySignEvent); err != nil {
 			slog.Error("Failed to write audit log", "error", err)
@@ -144,6 +150,8 @@ func main() {
 		slog.Error("no JMESPath expressions provided")
 		return
 	}
+
+	slog.Info("path expression", "exp", jmesPathExpression)
 
 	// Create JSMEPathPrincipalMapper
 	principalMapper, err := signer.NewJMESPathPrincipalMapper(jmesPathExpression)
