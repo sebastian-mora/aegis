@@ -40,7 +40,7 @@ func (c *AegisClient) SubmitPublicKey(pubKey string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to build request: %w", err)
 	}
 
-	req.Header.Set("Authorization", c.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
 	req.Header.Set("Content-Type", "text/plain")
 
 	resp, err := http.DefaultClient.Do(req)
