@@ -2,15 +2,17 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"log"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/sebastian-mora/aegis/internal/signer"
 	"golang.org/x/crypto/ssh"
 )
@@ -22,19 +24,20 @@ type LambdaDeps struct {
 	AuditRepo       AuditWriter
 }
 
-func convertClaims(stringClaims map[string]string) map[string]interface{} {
-	interfaceClaims := make(map[string]interface{}, len(stringClaims))
-	for k, v := range stringClaims {
-		// Try to parse JSON value if possible
-		var parsed interface{}
-		if err := json.Unmarshal([]byte(v), &parsed); err == nil {
-			interfaceClaims[k] = parsed
-		} else {
-			// Just a string, store as-is
-			interfaceClaims[k] = v
-		}
+// This custom parsing is required due to a bug in the lambda-events SDK
+// Tracking issue:  https://github.com/aws/aws-lambda-go/issues/570
+func ParseJWTClaims(tokenString string) (map[string]interface{}, error) {
+	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
+	if err != nil {
+		return nil, err
 	}
-	return interfaceClaims
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok {
+		// Convert to a map[string]interface{}
+		return map[string]interface{}(claims), nil
+	}
+
+	return nil, fmt.Errorf("invalid token claims type")
 }
 
 // NewHandler creates a new Lambda handler function
@@ -44,15 +47,33 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		slog.Info("Starting Aegis Signer Lambda function")
 		const certificateExpiration = 24 * time.Hour
 
-		// Massage the JWT claims to map[string]interface{}
-		// This is necessary because the AWS Lambda Go SDK uses a map[string]string
-		// for JWT claims, but we need to convert it to map[string]interface{}
-		// to work with the PrincipalMapper
-		stringClaims := event.RequestContext.Authorizer.JWT.Claims
-		interfaceClaims := convertClaims(stringClaims)
+		// Parse the JWT token to get the Claims
+		authHeader := event.Headers["authorization"] // Header keys may be lowercased by API Gateway
+		if authHeader == "" {
+			return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: "Missing Authorization header"}, nil
+		}
+
+		const prefix = "Bearer "
+		if !strings.HasPrefix(authHeader, prefix) {
+			return events.APIGatewayV2HTTPResponse{StatusCode: 401, Body: "Invalid Authorization format"}, nil
+		}
+
+		tokenStr := strings.TrimPrefix(authHeader, prefix)
+
+		parsedTokenClaims, err := ParseJWTClaims(tokenStr)
+		if err != nil {
+			return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: "Failed to parse jwt token"}, nil
+		}
+
+		// fetch audit requirements
+		aud, audOk := parsedTokenClaims["aud"].(string)
+		sub, subOk := parsedTokenClaims["sub"].(string)
+		if !audOk || !subOk {
+			return events.APIGatewayV2HTTPResponse{StatusCode: 400, Body: "Missing or invalid 'aud' or 'sub' claim"}, nil
+		}
 
 		// Map the JWT claims to SSH principals
-		principals, err := deps.PrincipalMapper.Map(interfaceClaims)
+		principals, err := deps.PrincipalMapper.Map(parsedTokenClaims)
 		if err != nil {
 			slog.Info("No principals matched from token, no cert generated", "error", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 200, Body: "no principals matched on auth token"}, nil
@@ -83,8 +104,8 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 			Principals:  principals,
 			SourceIp:    event.RequestContext.HTTP.SourceIP,
 			UserAgent:   event.RequestContext.HTTP.UserAgent,
-			Sub:         event.RequestContext.Authorizer.JWT.Claims["sub"],
-			Aud:         event.RequestContext.Authorizer.JWT.Claims["aud"],
+			Sub:         sub,
+			Aud:         aud,
 			ExpiresAt:   time.Unix(int64(userSSHCert.ValidBefore), 0).UTC(),
 		}
 

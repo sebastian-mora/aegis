@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/sebastian-mora/aegis/internal/signer"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/ssh"
@@ -49,6 +51,24 @@ func (a *MockAuditRepo) Write(event KeySignEvent) error {
 	return nil
 }
 
+func signJWTWithSecret(claims map[string]string, secret string) (string, error) {
+	mapClaims := jwt.MapClaims{
+		"aud": "test-aud",
+		"sub": "test-sub",
+	}
+	for k, v := range claims {
+		var parsed interface{}
+		if err := json.Unmarshal([]byte(v), &parsed); err == nil {
+			mapClaims[k] = parsed
+		} else {
+			mapClaims[k] = v
+		}
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, mapClaims)
+	return token.SignedString([]byte(secret))
+}
+
 func TestLambdaHandlerWithStringClaims(t *testing.T) {
 
 	pubkey, _, err := signer.NewSSHKeyPair(signer.ECDSA)
@@ -85,14 +105,12 @@ func TestLambdaHandlerWithStringClaims(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			handler := setupHandler(tt.jmesExpr)
+			tokenString, err := signJWTWithSecret(tt.claims, "test123")
+			assert.NoError(t, err)
 
 			event := events.APIGatewayV2HTTPRequest{
-				RequestContext: events.APIGatewayV2HTTPRequestContext{
-					Authorizer: &events.APIGatewayV2HTTPRequestContextAuthorizerDescription{
-						JWT: &events.APIGatewayV2HTTPRequestContextAuthorizerJWTDescription{
-							Claims: tt.claims,
-						},
-					},
+				Headers: map[string]string{
+					"authorization": "Bearer " + tokenString,
 				},
 				RawPath: "/sign_user_key",
 				Body:    pubkey,
@@ -124,14 +142,11 @@ func TestLambdaHandlerWithNoMatchingClaims(t *testing.T) {
 	assert.NoError(t, err)
 
 	handler := setupHandler("[]")
+	tokenString, err := signJWTWithSecret(map[string]string{}, "test123")
 
 	event := events.APIGatewayV2HTTPRequest{
-		RequestContext: events.APIGatewayV2HTTPRequestContext{
-			Authorizer: &events.APIGatewayV2HTTPRequestContextAuthorizerDescription{
-				JWT: &events.APIGatewayV2HTTPRequestContextAuthorizerJWTDescription{
-					Claims: map[string]string{"user": "test123"},
-				},
-			},
+		Headers: map[string]string{
+			"authorization": "Bearer " + tokenString,
 		},
 		RawPath: "/sign_user_key",
 		Body:    pubkey,
