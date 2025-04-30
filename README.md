@@ -60,15 +60,17 @@ cat <<EOF >> ~/.ssh/aegis_config
 AUTH_DOMAIN="https://login.example.com"
 CLIENT_ID="ABCD"
 AEGIS_ENDPOINT="https://abcx.execute-api.us-east-1.amazonaws.com/..."
+DEFAUlt_TTL="24h"
 EOF
 ```
 
 Alternatively, you can pass the values directly via the command line:
 ```bash
 ./aegis \
-  --auth-url https://login.example.com \
-  --clientid ABCD \
-  --aegis-endpoint https://abcx.execute-api.us-east-1.amazonaws.com/...
+  -auth-url https://login.example.com \
+  -clientid ABCD \
+  -aegis-endpoint https://abcx.execute-api.us-east-1.amazonaws.com/...
+  -ttl 1h
 ```
 
 
