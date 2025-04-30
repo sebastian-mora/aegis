@@ -19,6 +19,7 @@ var (
 	aegisEndpointFlag string
 	configPathFlag    string
 	keyOutputPathFlag string
+	ttlFlag           string
 	config            ClientConfig
 )
 
@@ -37,6 +38,7 @@ func init() {
 	flag.BoolVar(&verboseFlag, "verbose", false, "Enable verbose output")
 	flag.StringVar(&configPathFlag, "config", filepath.Join(os.Getenv("HOME"), ".config/aegis"), "Path to the configuration file")
 	flag.StringVar(&keyOutputPathFlag, "key-output-path", filepath.Join(os.Getenv("HOME"), ".ssh"), "Path to save the generated keys")
+	flag.StringVar(&ttlFlag, "ttl", "24h", "Time to live for the signed key")
 	flag.Parse()
 
 	// Load environment variables
@@ -54,6 +56,13 @@ func init() {
 	}
 	if keyOutputPathFlag != "" {
 		config.KeyOutputPath = keyOutputPathFlag
+	}
+	if ttlFlag != "" {
+		parsedTTL, err := time.ParseDuration(ttlFlag)
+		if err != nil {
+			fatal("Error parsing -ttl: %v", err)
+		}
+		config.DefaultTTL = parsedTTL
 	}
 
 	// Check for required configuration values
