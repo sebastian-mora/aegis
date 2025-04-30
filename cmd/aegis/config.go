@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -14,6 +15,7 @@ type ClientConfig struct {
 	AegisEndpoint string
 	Scope         string
 	KeyOutputPath string
+	DefaultTTL    time.Duration
 }
 
 func createAegisConfigDir() error {
@@ -34,12 +36,21 @@ func loadConfig() ClientConfig {
 		godotenv.Load(configFile)
 	}
 
+	// calc default ttl
+	defaultTTL, err := time.ParseDuration(getEnv("DEFAULT_TTL", "24h"))
+	if err != nil {
+		fmt.Printf("Error parsing DEFAULT_TTL: %v\n", err)
+		fmt.Println("Falling back to default value of 24 hours.")
+		defaultTTL = 24 * time.Hour // Fallback to 24 hours
+	}
+
 	return ClientConfig{
 		AuthDomain:    getEnv("AUTH_DOMAIN", ""),
 		ClientID:      getEnv("CLIENT_ID", ""),
 		AegisEndpoint: getEnv("AEGIS_ENDPOINT", ""),
 		Scope:         getEnv("SCOPE", "openid email profile sign:user_key"),
 		KeyOutputPath: getEnv("KEY_OUTPUT_PATH", filepath.Join(os.Getenv("HOME"), ".ssh")),
+		DefaultTTL:    defaultTTL,
 	}
 }
 
