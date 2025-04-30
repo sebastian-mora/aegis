@@ -123,7 +123,7 @@ func submitPublicKeyForAegisSigning(accessToken string, pubKey string) ([]byte, 
 	// Submit the public key to Aegis for signing
 	signedPubKey, err := aegisClient.SubmitPublicKey(pubKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to submit public key: %w", err)
+		return nil, err
 	}
 
 	return signedPubKey, nil
