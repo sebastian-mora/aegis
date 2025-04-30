@@ -116,12 +116,12 @@ func saveKeyPair(pubKey, signedPubKey, privKey string) {
 	}
 }
 
-func submitPublicKeyForAegisSigning(accessToken string, pubKey string) ([]byte, error) {
+func submitPublicKeyForAegisSigning(accessToken string, request signer.PublicKeySignRequest) ([]byte, error) {
 	// Create a new Aegis client
 	aegisClient := signer.NewAegisClient(config.AegisEndpoint, accessToken)
 
 	// Submit the public key to Aegis for signing
-	signedPubKey, err := aegisClient.SubmitPublicKey(pubKey)
+	signedPubKey, err := aegisClient.SubmitPublicKey(request)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,10 @@ func main() {
 	// Submit the public key to Aegis for signing
 	fmt.Println("🚀 Submitting public key to Aegis for signing...")
 
-	signedPubKey, err := submitPublicKeyForAegisSigning(oauthToken.AccessToken, pubKey)
+	signedPubKey, err := submitPublicKeyForAegisSigning(oauthToken.AccessToken, signer.PublicKeySignRequest{
+		PublicKey: pubKey,
+		TTL:       24 * time.Hour,
+	})
 	if err != nil {
 		fatal("Failed to submit public key for signing: %v", err)
 	}
