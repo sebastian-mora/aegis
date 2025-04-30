@@ -40,12 +40,31 @@ func ParseJWTClaims(tokenString string) (map[string]interface{}, error) {
 	return nil, fmt.Errorf("invalid token claims type")
 }
 
+func ParseTTL(ttl string) (time.Duration, error) {
+	parsedTTL, err := time.ParseDuration(ttl)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse ttl: %w", err)
+	}
+
+	if parsedTTL <= 0 {
+		return 0, fmt.Errorf("ttl must be greater than 0")
+	}
+
+	// set max TTL to 30 days
+	// This is a measure to prevent long-lived certificates
+	if parsedTTL > time.Duration(30*24*time.Hour) {
+		return 0, fmt.Errorf("ttl is too long")
+	}
+
+	return parsedTTL, nil
+}
+
 // NewHandler creates a new Lambda handler function
 func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	return func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 
 		slog.Info("Starting Aegis Signer Lambda function")
-		const certificateExpiration = 24 * time.Hour
+		var certificateExpiration = time.Duration(24 * time.Hour)
 
 		// Parse the JWT token to get the Claims
 		authHeader := event.Headers["authorization"] // Header keys may be lowercased by API Gateway
@@ -86,6 +105,17 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		if err != nil {
 			slog.Error("failed to parse submitted public key", "error", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 400, Body: "invalid public key"}, nil
+		}
+
+		// Use the ttl from the query string if provided
+		// otherwise use the default TTL
+		if rawTTL := event.QueryStringParameters["ttl"]; rawTTL != "" {
+			ttl, err := ParseTTL(rawTTL)
+			if err != nil {
+				slog.Error("failed to parse ttl", "error", err)
+				return events.APIGatewayV2HTTPResponse{StatusCode: 400, Body: err.Error()}, nil
+			}
+			certificateExpiration = ttl
 		}
 
 		// Sign the certificate using the Signer
