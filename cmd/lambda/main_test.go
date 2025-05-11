@@ -177,7 +177,7 @@ func TestLambdaHandlerWithTTls(t *testing.T) {
 		},
 		{
 			name:               "Custom TTL",
-			ttl:                "12h",
+			ttl:                "720",
 			expectedTTL:        12 * time.Hour,
 			expectedStatusCode: 200,
 		},
@@ -189,19 +189,19 @@ func TestLambdaHandlerWithTTls(t *testing.T) {
 		},
 		{
 			name:               "Negative TTL",
-			ttl:                "-1h",
+			ttl:                "-60",
 			expectedTTL:        0,
 			expectedStatusCode: 400,
 		},
 		{
 			name:               "Zero TTL",
-			ttl:                "0s",
+			ttl:                "0",
 			expectedTTL:        0,
 			expectedStatusCode: 400,
 		},
 		{
 			name:               "TTL > 30 days",
-			ttl:                "31d",
+			ttl:                "44640",
 			expectedTTL:        0,
 			expectedStatusCode: 400,
 		},
