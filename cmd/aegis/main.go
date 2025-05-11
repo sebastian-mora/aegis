@@ -62,7 +62,7 @@ func init() {
 		if err != nil {
 			fatal("Error parsing -ttl: %v", err)
 		}
-		config.DefaultTTL = parsedTTL
+		config.TTL = parsedTTL
 	}
 
 	// Check for required configuration values
@@ -171,7 +171,7 @@ func main() {
 
 	signedPubKey, err := submitPublicKeyForAegisSigning(oauthToken.AccessToken, signer.PublicKeySignRequest{
 		PublicKey: pubKey,
-		TTL:       24 * time.Hour,
+		TTL:       config.TTL,
 	})
 	if err != nil {
 		fatal("Failed to submit public key for signing: %v", err)
