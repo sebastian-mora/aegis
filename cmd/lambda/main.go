@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,16 +42,20 @@ func ParseJWTClaims(tokenString string) (map[string]interface{}, error) {
 }
 
 func ParseTTL(ttl string) (time.Duration, error) {
-	parsedTTL, err := time.ParseDuration(ttl)
+	// Parse the TTL string as an integer in minutes
+	ttlMinutes, err := strconv.Atoi(ttl)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse ttl: %w", err)
 	}
+
+	// Convert the minutes to time.Duration
+	parsedTTL := time.Duration(ttlMinutes) * time.Minute
 
 	if parsedTTL <= 0 {
 		return 0, fmt.Errorf("ttl must be greater than 0")
 	}
 
-	// set max TTL to 30 days
+	// Set max TTL to 30 days
 	// This is a measure to prevent long-lived certificates
 	if parsedTTL > time.Duration(30*24*time.Hour) {
 		return 0, fmt.Errorf("ttl is too long")
@@ -100,8 +105,6 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 			return events.APIGatewayV2HTTPResponse{StatusCode: 200, Body: "no principals matched on auth token"}, nil
 		}
 
-		slog.Info("mapped principals from token claims", "principals", principals)
-
 		// Parse the public key from the request body
 		pubKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(event.Body))
 		if err != nil {
@@ -110,7 +113,6 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		}
 
 		// Use the ttl from the query string if provided
-		// otherwise use the default TTL
 		if rawTTL := event.QueryStringParameters["ttl"]; rawTTL != "" {
 			ttl, err := ParseTTL(rawTTL)
 			if err != nil {

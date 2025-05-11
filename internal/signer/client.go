@@ -54,7 +54,10 @@ func (c *AegisClient) SubmitPublicKey(data PublicKeySignRequest) ([]byte, error)
 	req.Header.Set("Content-Type", "text/plain")
 
 	if data.TTL > 0 {
-		req.URL.Query().Set("ttl", fmt.Sprintf("%d", int(data.TTL.Minutes())))
+		ttlMinutes := int(data.TTL.Minutes())
+		query := req.URL.Query()
+		query.Set("ttl", fmt.Sprintf("%d", ttlMinutes))
+		req.URL.RawQuery = query.Encode()
 	}
 
 	resp, err := http.DefaultClient.Do(req)
