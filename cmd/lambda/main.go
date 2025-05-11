@@ -129,9 +129,6 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		}
 		slog.Info("Successfully signed certificate", "certificate", userSSHCert.KeyId)
 
-		slog.Info("ssh key signed", "principals", principals, "ttl", certificateExpiration.String())
-		slog.Info("Successfully signed certificate", "certificate", userSSHCert.KeyId)
-
 		// Return the SSH certificate in response
 		certString := string(ssh.MarshalAuthorizedKey(userSSHCert))
 
@@ -152,7 +149,6 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 
 		if err := deps.AuditRepo.Write(keySignEvent); err != nil {
 			slog.Error("Failed to write audit log", "error", err)
-			slog.Info("Audit Event", "data", keySignEvent)
 		}
 
 		return events.APIGatewayV2HTTPResponse{
