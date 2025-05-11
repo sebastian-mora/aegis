@@ -130,6 +130,7 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		slog.Info("Successfully signed certificate", "certificate", userSSHCert.KeyId)
 
 		slog.Info("ssh key signed", "principals", principals, "ttl", certificateExpiration.String())
+		slog.Info("Successfully signed certificate", "certificate", userSSHCert.KeyId)
 
 		// Return the SSH certificate in response
 		certString := string(ssh.MarshalAuthorizedKey(userSSHCert))
