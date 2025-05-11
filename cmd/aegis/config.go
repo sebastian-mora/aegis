@@ -15,7 +15,7 @@ type ClientConfig struct {
 	AegisEndpoint string
 	Scope         string
 	KeyOutputPath string
-	DefaultTTL    time.Duration
+	TTL           time.Duration
 }
 
 func createAegisConfigDir() error {
@@ -50,7 +50,7 @@ func loadConfig() ClientConfig {
 		AegisEndpoint: getEnv("AEGIS_ENDPOINT", ""),
 		Scope:         getEnv("SCOPE", "openid email profile sign:user_key"),
 		KeyOutputPath: getEnv("KEY_OUTPUT_PATH", filepath.Join(os.Getenv("HOME"), ".ssh")),
-		DefaultTTL:    defaultTTL,
+		TTL:           defaultTTL,
 	}
 }
 
