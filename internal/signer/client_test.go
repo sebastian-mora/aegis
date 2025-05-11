@@ -19,7 +19,7 @@ func TestSubmitPublicKey(t *testing.T) {
 			return
 		}
 
-		if r.Header.Get("Authorization") != "test-token" {
+		if r.Header.Get("Authorization") != "Bearer test-token" {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
