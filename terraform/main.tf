@@ -1,6 +1,5 @@
 provider "aws" {
   region  = var.region
-  profile = var.profile
 }
 
 module "aeige_cert_signer" {
