@@ -80,6 +80,7 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		tokenStr := strings.TrimPrefix(authHeader, prefix)
 
 		parsedTokenClaims, err := ParseJWTClaims(tokenStr)
+		slog.Info("Parsed JWT claims", "claims", parsedTokenClaims)
 		if err != nil {
 			return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: "Failed to parse jwt token"}, nil
 		}
@@ -93,6 +94,7 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 
 		// Map the JWT claims to SSH principals
 		principals, err := deps.PrincipalMapper.Map(parsedTokenClaims)
+		slog.Info("Mapped principals from JWT claims", "principals", principals)
 		if err != nil {
 			slog.Info("No principals matched from token, no cert generated", "error", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 200, Body: "no principals matched on auth token"}, nil
@@ -115,6 +117,7 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 				slog.Error("failed to parse ttl", "error", err)
 				return events.APIGatewayV2HTTPResponse{StatusCode: 400, Body: err.Error()}, nil
 			}
+			slog.Info("Parsed TTL from query string", "ttl", ttl)
 			certificateExpiration = ttl
 		}
 
@@ -124,6 +127,7 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 			slog.Error("failed to sign certificate", "error", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: "failed to sign certificate"}, nil
 		}
+		slog.Info("Successfully signed certificate", "certificate", userSSHCert.KeyId)
 
 		slog.Info("ssh key signed", "principals", principals, "ttl", certificateExpiration.String())
 
