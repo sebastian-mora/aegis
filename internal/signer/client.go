@@ -5,13 +5,22 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 // PublicKeySigner defines the methods for interacting with a key signing service.
 type PublicKeySigner interface {
 	// SubmitPublicKey submits a public key to the server.
 	// It returns the signed public key or an error if the request fails.
-	SubmitPublicKey(accessToken, pubKey string) ([]byte, error)
+	SubmitPublicKey(PublicKeySignRequest) ([]byte, error)
+}
+
+type PublicKeySignRequest struct {
+	// PublicKey is the public key to be signed.
+	PublicKey string
+
+	// TTL is the time-to-live for the signed key in minutes. (optional)
+	TTL time.Duration
 }
 
 type AegisClient struct {
@@ -33,8 +42,9 @@ func NewAegisClient(endpoint, accessToken string) *AegisClient {
 }
 
 // SubmitPublicKey submits a public key to the signing service and returns the signed public key.
-func (c *AegisClient) SubmitPublicKey(pubKey string) ([]byte, error) {
-	req, err := http.NewRequest("POST", c.Endpoint, bytes.NewBufferString(pubKey))
+// It takes an access token, the public key, and an optional TTL (time-to-live) for the signed key in minutes.
+func (c *AegisClient) SubmitPublicKey(data PublicKeySignRequest) ([]byte, error) {
+	req, err := http.NewRequest("POST", c.Endpoint, bytes.NewBufferString(data.PublicKey))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request: %w", err)
@@ -42,6 +52,13 @@ func (c *AegisClient) SubmitPublicKey(pubKey string) ([]byte, error) {
 
 	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
 	req.Header.Set("Content-Type", "text/plain")
+
+	if data.TTL > 0 {
+		ttlMinutes := int(data.TTL.Minutes())
+		query := req.URL.Query()
+		query.Set("ttl", fmt.Sprintf("%d", ttlMinutes))
+		req.URL.RawQuery = query.Encode()
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

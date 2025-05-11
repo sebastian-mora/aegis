@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/golang-jwt/jwt/v5"
@@ -159,4 +160,87 @@ func TestLambdaHandlerWithNoMatchingClaims(t *testing.T) {
 
 	assert.Equal(t, "no principals matched on auth token", resp.Body)
 
+}
+
+func TestLambdaHandlerWithTTls(t *testing.T) {
+	tests := []struct {
+		name               string
+		ttl                string
+		expectedTTL        time.Duration
+		expectedStatusCode int
+	}{
+		{
+			name:               "Default TTL",
+			ttl:                "",
+			expectedTTL:        24 * time.Hour,
+			expectedStatusCode: 200,
+		},
+		{
+			name:               "Custom TTL",
+			ttl:                "720",
+			expectedTTL:        12 * time.Hour,
+			expectedStatusCode: 200,
+		},
+		{
+			name:               "Invalid TTL",
+			ttl:                "invalid",
+			expectedTTL:        0,
+			expectedStatusCode: 400,
+		},
+		{
+			name:               "Negative TTL",
+			ttl:                "-60",
+			expectedTTL:        0,
+			expectedStatusCode: 400,
+		},
+		{
+			name:               "Zero TTL",
+			ttl:                "0",
+			expectedTTL:        0,
+			expectedStatusCode: 400,
+		},
+		{
+			name:               "TTL > 30 days",
+			ttl:                "44640",
+			expectedTTL:        0,
+			expectedStatusCode: 400,
+		},
+	}
+
+	pubkey, _, err := signer.NewSSHKeyPair(signer.ECDSA)
+	assert.NoError(t, err)
+
+	handler := setupHandler("name")
+	tokenString, err := signJWTWithSecret(map[string]string{"name": "ruse"}, "test123")
+
+	for _, tt := range tests {
+
+		t.Run(tt.name, func(t *testing.T) {
+
+			event := events.APIGatewayV2HTTPRequest{
+				Headers: map[string]string{
+					"authorization": "Bearer " + tokenString,
+				},
+				RawPath: "/sign_user_key",
+				Body:    pubkey,
+				QueryStringParameters: map[string]string{
+					"ttl": tt.ttl,
+				},
+			}
+
+			resp, err := handler(context.Background(), event)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode)
+
+			if tt.expectedStatusCode == 200 {
+				parsedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(resp.Body))
+				assert.NoError(t, err)
+
+				sshCert, ok := parsedKey.(*ssh.Certificate)
+				assert.True(t, ok)
+				assert.LessOrEqual(t, sshCert.ValidBefore, uint64(time.Now().Add(tt.expectedTTL).Unix()))
+			}
+		})
+	}
 }

@@ -19,6 +19,7 @@ var (
 	aegisEndpointFlag string
 	configPathFlag    string
 	keyOutputPathFlag string
+	ttlFlag           string
 	config            ClientConfig
 )
 
@@ -37,6 +38,7 @@ func init() {
 	flag.BoolVar(&verboseFlag, "verbose", false, "Enable verbose output")
 	flag.StringVar(&configPathFlag, "config", filepath.Join(os.Getenv("HOME"), ".config/aegis"), "Path to the configuration file")
 	flag.StringVar(&keyOutputPathFlag, "key-output-path", filepath.Join(os.Getenv("HOME"), ".ssh"), "Path to save the generated keys")
+	flag.StringVar(&ttlFlag, "ttl", "24h", "Time to live for the signed key")
 	flag.Parse()
 
 	// Load environment variables
@@ -54,6 +56,13 @@ func init() {
 	}
 	if keyOutputPathFlag != "" {
 		config.KeyOutputPath = keyOutputPathFlag
+	}
+	if ttlFlag != "" {
+		parsedTTL, err := time.ParseDuration(ttlFlag)
+		if err != nil {
+			fatal("Error parsing -ttl: %v", err)
+		}
+		config.TTL = parsedTTL
 	}
 
 	// Check for required configuration values
@@ -116,12 +125,12 @@ func saveKeyPair(pubKey, signedPubKey, privKey string) {
 	}
 }
 
-func submitPublicKeyForAegisSigning(accessToken string, pubKey string) ([]byte, error) {
+func submitPublicKeyForAegisSigning(accessToken string, request signer.PublicKeySignRequest) ([]byte, error) {
 	// Create a new Aegis client
 	aegisClient := signer.NewAegisClient(config.AegisEndpoint, accessToken)
 
 	// Submit the public key to Aegis for signing
-	signedPubKey, err := aegisClient.SubmitPublicKey(pubKey)
+	signedPubKey, err := aegisClient.SubmitPublicKey(request)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +169,10 @@ func main() {
 	// Submit the public key to Aegis for signing
 	fmt.Println("🚀 Submitting public key to Aegis for signing...")
 
-	signedPubKey, err := submitPublicKeyForAegisSigning(oauthToken.AccessToken, pubKey)
+	signedPubKey, err := submitPublicKeyForAegisSigning(oauthToken.AccessToken, signer.PublicKeySignRequest{
+		PublicKey: pubKey,
+		TTL:       config.TTL,
+	})
 	if err != nil {
 		fatal("Failed to submit public key for signing: %v", err)
 	}

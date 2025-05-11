@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,12 +41,35 @@ func ParseJWTClaims(tokenString string) (map[string]interface{}, error) {
 	return nil, fmt.Errorf("invalid token claims type")
 }
 
+func ParseTTL(ttl string) (time.Duration, error) {
+	// Parse the TTL string as an integer in minutes
+	ttlMinutes, err := strconv.Atoi(ttl)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse ttl: %w", err)
+	}
+
+	// Convert the minutes to time.Duration
+	parsedTTL := time.Duration(ttlMinutes) * time.Minute
+
+	if parsedTTL <= 0 {
+		return 0, fmt.Errorf("ttl must be greater than 0")
+	}
+
+	// Set max TTL to 30 days
+	// This is a measure to prevent long-lived certificates
+	if parsedTTL > time.Duration(30*24*time.Hour) {
+		return 0, fmt.Errorf("ttl is too long")
+	}
+
+	return parsedTTL, nil
+}
+
 // NewHandler creates a new Lambda handler function
 func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	return func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 
 		slog.Info("Starting Aegis Signer Lambda function")
-		const certificateExpiration = 24 * time.Hour
+		var certificateExpiration = time.Duration(24 * time.Hour)
 
 		// Parse the JWT token to get the Claims
 		authHeader := event.Headers["authorization"] // Header keys may be lowercased by API Gateway
@@ -61,6 +85,7 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 		tokenStr := strings.TrimPrefix(authHeader, prefix)
 
 		parsedTokenClaims, err := ParseJWTClaims(tokenStr)
+		slog.Info("Parsed JWT claims", "claims", parsedTokenClaims)
 		if err != nil {
 			return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: "Failed to parse jwt token"}, nil
 		}
@@ -74,12 +99,11 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 
 		// Map the JWT claims to SSH principals
 		principals, err := deps.PrincipalMapper.Map(parsedTokenClaims)
+		slog.Info("Mapped principals from JWT claims", "principals", principals)
 		if err != nil {
 			slog.Info("No principals matched from token, no cert generated", "error", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 200, Body: "no principals matched on auth token"}, nil
 		}
-
-		slog.Info("mapped principals from token claims", "principals", principals)
 
 		// Parse the public key from the request body
 		pubKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(event.Body))
@@ -88,14 +112,24 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 			return events.APIGatewayV2HTTPResponse{StatusCode: 400, Body: "invalid public key"}, nil
 		}
 
+		// Use the ttl from the query string if provided
+		if rawTTL := event.QueryStringParameters["ttl"]; rawTTL != "" {
+			ttl, err := ParseTTL(rawTTL)
+			if err != nil {
+				slog.Error("failed to parse ttl", "error", err)
+				return events.APIGatewayV2HTTPResponse{StatusCode: 400, Body: err.Error()}, nil
+			}
+			slog.Info("Parsed TTL from query string", "ttl", ttl)
+			certificateExpiration = ttl
+		}
+
 		// Sign the certificate using the Signer
 		userSSHCert, err := deps.Signer.Sign(uint32(ssh.UserCert), pubKey, principals, certificateExpiration)
 		if err != nil {
 			slog.Error("failed to sign certificate", "error", err)
 			return events.APIGatewayV2HTTPResponse{StatusCode: 500, Body: "failed to sign certificate"}, nil
 		}
-
-		slog.Info("ssh key signed", "principals", principals, "ttl", certificateExpiration.String())
+		slog.Info("Successfully signed certificate", "certificate", userSSHCert.KeyId)
 
 		// Return the SSH certificate in response
 		certString := string(ssh.MarshalAuthorizedKey(userSSHCert))
@@ -117,7 +151,6 @@ func NewHandler(deps LambdaDeps) func(ctx context.Context, event events.APIGatew
 
 		if err := deps.AuditRepo.Write(keySignEvent); err != nil {
 			slog.Error("Failed to write audit log", "error", err)
-			slog.Info("Audit Event", "data", keySignEvent)
 		}
 
 		return events.APIGatewayV2HTTPResponse{
