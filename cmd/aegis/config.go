@@ -28,12 +28,11 @@ func createAegisConfigDir() error {
 	return nil
 }
 
-func loadConfig() ClientConfig {
+func loadConfig(file string) ClientConfig {
 
 	// if the config file exists in the config directory, load it
-	configFile := filepath.Join(os.Getenv("HOME"), ".config/aegis", "config")
-	if _, err := os.Stat(configFile); err == nil {
-		godotenv.Load(configFile)
+	if _, err := os.Stat(file); err == nil {
+		godotenv.Load(file)
 	}
 
 	// calc default ttl
