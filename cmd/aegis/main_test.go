@@ -168,3 +168,35 @@ func TestRun_WriteKeyToFileError(t *testing.T) {
 	err := run(cfg)
 	assert.Error(t, err)
 }
+
+func TestLoadClientConfigf(t *testing.T) {
+	// Create a temporary config file
+	tempFile, err := os.CreateTemp("", "config.json")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tempFile.Name())
+
+	// Write mock config data to the file
+	configData := `
+	DEFAULT_TTL=1h
+	AUTH_DOMAIN=https://mock.auth.domain
+	CLIENT_ID=mock-client-id
+	AEGIS_ENDPOINT=https://mock.aegis.endpoint
+	KEY_OUTPUT_PATH=/mock/key/output/path
+	`
+	if _, err := tempFile.WriteString(configData); err != nil {
+		t.Fatalf("failed to write to temp file: %v", err)
+	}
+
+	// write the config path to the temp file
+	configPathFlag = tempFile.Name()
+
+	cfg, err := loadClientConfig()
+	assert.NoError(t, err)
+	assert.Equal(t, "https://mock.auth.domain", cfg.AuthDomain)
+	assert.Equal(t, "mock-client-id", cfg.ClientID)
+	assert.Equal(t, "https://mock.aegis.endpoint", cfg.AegisEndpoint)
+	assert.Equal(t, "/mock/key/output/path", cfg.KeyOutputPath)
+	assert.Equal(t, time.Hour, cfg.TTL)
+}
