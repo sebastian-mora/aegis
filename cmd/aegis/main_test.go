@@ -89,3 +89,26 @@ func TestRun_Success(t *testing.T) {
 	err := run(cfg)
 	assert.NoError(t, err)
 }
+
+func TestRun_InvalidDeviceCode(t *testing.T) {
+	// device code server returns 400 Bad Request
+	deviceCodeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "bad request", http.StatusBadRequest)
+	}))
+	defer deviceCodeServer.Close()
+
+	signerServer := mockSignerServer()
+	defer signerServer.Close()
+
+	cfg := ClientConfig{
+		AuthDomain:    deviceCodeServer.URL,
+		ClientID:      "mock-client-id",
+		AegisEndpoint: signerServer.URL,
+		KeyOutputPath: t.TempDir(),
+		TTL:           1 * time.Hour,
+	}
+
+	err := run(cfg)
+	assert.Error(t, err)
+
+}
