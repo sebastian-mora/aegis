@@ -27,7 +27,7 @@ func initFlags() {
 	flag.StringVar(&clientIDFlag, "client-id", "", "Client ID for the authentication server")
 	flag.StringVar(&aegisEndpointFlag, "aegis-endpoint", "", "Aegis endpoint")
 	flag.BoolVar(&verboseFlag, "verbose", false, "Enable verbose output")
-	flag.StringVar(&configPathFlag, "config", filepath.Join(os.Getenv("HOME"), ".config/aegis"), "Path to the configuration file")
+	flag.StringVar(&configPathFlag, "config", filepath.Join(os.Getenv("HOME"), ".config/aegis/config"), "Path to the configuration file")
 	flag.StringVar(&keyOutputPathFlag, "key-output-path", filepath.Join(os.Getenv("HOME"), ".ssh"), "Path to save the generated keys")
 	flag.StringVar(&ttlFlag, "ttl", "24h", "Time to live for the signed key")
 	flag.Parse()
@@ -119,7 +119,9 @@ func submitPublicKeyForSigning(cfg ClientConfig, token string, pubKey string) ([
 func run(cfg ClientConfig) error {
 	fmt.Println("🔐 Aegis Signer CLI")
 
-	token, err := LoadToken(filepath.Join(configPathFlag, "token.json"))
+	tokenPath := filepath.Join(filepath.Dir(configPathFlag), "token.json")
+	token, err := LoadToken(tokenPath)
+
 	if err != nil || token == nil || token.Expiry.Before(time.Now()) {
 		token, err = authenticateUser(cfg)
 		if err != nil {
@@ -127,7 +129,7 @@ func run(cfg ClientConfig) error {
 		}
 
 		// Save the token for future use
-		if err := SaveToken(filepath.Join(configPathFlag, "token.json"), token); err != nil {
+		if err := SaveToken(tokenPath, token); err != nil {
 			return fmt.Errorf("failed to save token: %w", err)
 		}
 	}
