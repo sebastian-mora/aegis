@@ -20,19 +20,10 @@ var (
 	configPathFlag    string
 	keyOutputPathFlag string
 	ttlFlag           string
-	config            ClientConfig
 )
 
-func init() {
-
-	//
-	err := createAegisConfigDir()
-	if err != nil {
-		fatal("Failed to create config directory: %v", err)
-	}
-
-	// Parse flags
-	flag.StringVar(&authDomainFlag, "auth-url", "", "Url to the authentication server")
+func initFlags() {
+	flag.StringVar(&authDomainFlag, "auth-url", "", "URL to the authentication server")
 	flag.StringVar(&clientIDFlag, "client-id", "", "Client ID for the authentication server")
 	flag.StringVar(&aegisEndpointFlag, "aegis-endpoint", "", "Aegis endpoint")
 	flag.BoolVar(&verboseFlag, "verbose", false, "Enable verbose output")
@@ -40,147 +31,146 @@ func init() {
 	flag.StringVar(&keyOutputPathFlag, "key-output-path", filepath.Join(os.Getenv("HOME"), ".ssh"), "Path to save the generated keys")
 	flag.StringVar(&ttlFlag, "ttl", "24h", "Time to live for the signed key")
 	flag.Parse()
+}
 
-	// Load environment variables
-	config = loadConfig()
+func loadClientConfig() (ClientConfig, error) {
+	cfg := loadConfig()
 
-	// Override with command-line flags if provided
+	// Override with CLI flags if provided
 	if authDomainFlag != "" {
-		config.AuthDomain = authDomainFlag
+		cfg.AuthDomain = authDomainFlag
 	}
 	if clientIDFlag != "" {
-		config.ClientID = clientIDFlag
+		cfg.ClientID = clientIDFlag
 	}
 	if aegisEndpointFlag != "" {
-		config.AegisEndpoint = aegisEndpointFlag
+		cfg.AegisEndpoint = aegisEndpointFlag
 	}
 	if keyOutputPathFlag != "" {
-		config.KeyOutputPath = keyOutputPathFlag
+		cfg.KeyOutputPath = keyOutputPathFlag
 	}
 	if ttlFlag != "" {
 		parsedTTL, err := time.ParseDuration(ttlFlag)
 		if err != nil {
-			fatal("Error parsing -ttl: %v", err)
+			return cfg, fmt.Errorf("invalid TTL: %w", err)
 		}
-		config.TTL = parsedTTL
+		cfg.TTL = parsedTTL
 	}
 
-	// Check for required configuration values
-	if config.AuthDomain == "" || config.ClientID == "" || config.AegisEndpoint == "" {
-		fatal("Missing required configuration values. Please provide them via flags or in the environment.")
+	if cfg.AuthDomain == "" || cfg.ClientID == "" || cfg.AegisEndpoint == "" {
+		return cfg, fmt.Errorf("missing required config values (auth-url, client-id, aegis-endpoint)")
 	}
 
-	// Optional: Print verbose output
-	if verboseFlag {
-		fmt.Printf("Using configuration: %+v\n", config)
-	}
+	return cfg, nil
 }
 
-func WriteKeyToFile(name, key string) error {
-	err := os.WriteFile(filepath.Join(config.KeyOutputPath, name), []byte(key), 0600)
-	if err != nil {
-		return fmt.Errorf("write key to file failed: %w", err)
-	}
-	return nil
-}
-
-func fatal(format string, args ...any) {
+func fatalf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "❌ "+format+"\n", args...)
 	os.Exit(1)
 }
 
-func authenticateUser() *oauth2.Token {
+func WriteKeyToFile(path, key string) error {
+	return os.WriteFile(path, []byte(key), 0600)
+}
 
-	// Create a new OAuth2 config
-	oauthConfig := &oauth2.Config{
-		ClientID: config.ClientID,
+func authenticateUser(cfg ClientConfig) (*oauth2.Token, error) {
+	oauthCfg := &oauth2.Config{
+		ClientID: cfg.ClientID,
 		Endpoint: oauth2.Endpoint{
-			DeviceAuthURL: config.AuthDomain + "/application/o/device/",
-			TokenURL:      config.AuthDomain + "/application/o/token/",
+			DeviceAuthURL: cfg.AuthDomain + "/application/o/device/",
+			TokenURL:      cfg.AuthDomain + "/application/o/token/",
 		},
-		Scopes: []string{config.Scope},
+		Scopes: []string{cfg.Scope},
 	}
 
-	// Request a token
 	ctx := context.Background()
-	token, err := RequestDeviceCode(ctx, oauthConfig)
+	token, err := RequestDeviceCode(ctx, oauthCfg)
 	if err != nil {
-		fatal("Failed to request device code: %v", err)
+		return nil, fmt.Errorf("failed to request device code: %v", err)
 	}
-
-	return token
+	return token, nil
 }
 
-func saveKeyPair(pubKey, signedPubKey, privKey string) {
+func saveKeyPair(cfg ClientConfig, pubKey, signedPubKey, privKey string) {
+	files := map[string]string{
+		"aegis.pub":      pubKey,
+		"aegis":          privKey,
+		"aegis-cert.pub": signedPubKey,
+	}
 
-	// Save the keys to files
-	if err := WriteKeyToFile("aegis.pub", pubKey); err != nil {
-		fatal("Failed to write public key to file: %v", err)
-	}
-	if err := WriteKeyToFile("aegis", privKey); err != nil {
-		fatal("Failed to write private key to file: %v", err)
-	}
-	if err := WriteKeyToFile("aegis-cert.pub", string(signedPubKey)); err != nil {
-		fatal("Failed to write certificate to file: %v", err)
+	for name, content := range files {
+		path := filepath.Join(cfg.KeyOutputPath, name)
+		if err := WriteKeyToFile(path, content); err != nil {
+			fatalf("failed to write %s: %v", name, err)
+		}
 	}
 }
 
-func submitPublicKeyForAegisSigning(accessToken string, request signer.PublicKeySignRequest) ([]byte, error) {
-	// Create a new Aegis client
-	aegisClient := signer.NewAegisClient(config.AegisEndpoint, accessToken)
-
-	// Submit the public key to Aegis for signing
-	signedPubKey, err := aegisClient.SubmitPublicKey(request)
-	if err != nil {
-		return nil, err
-	}
-
-	return signedPubKey, nil
+func submitPublicKeyForSigning(cfg ClientConfig, token string, pubKey string) ([]byte, error) {
+	client := signer.NewAegisClient(cfg.AegisEndpoint, token)
+	return client.SubmitPublicKey(signer.PublicKeySignRequest{
+		PublicKey: pubKey,
+		TTL:       cfg.TTL,
+	})
 }
 
-func main() {
+func run(cfg ClientConfig) error {
 	fmt.Println("🔐 Aegis Signer CLI")
 
-	// Get or authenticate the user to get an access token
-	oauthToken, err := LoadToken(configPathFlag + "/token.json")
-	if err != nil {
-		fatal("Failed to load access token: %v", err)
-	}
+	token, err := LoadToken(filepath.Join(configPathFlag, "token.json"))
+	if err != nil || token == nil || token.Expiry.Before(time.Now()) {
+		token, err = authenticateUser(cfg)
+		if err != nil {
+			return fmt.Errorf("authentication failed: %w", err)
+		}
 
-	// If we failed to load a cached token or it's expired, reauth
-	if oauthToken == nil || oauthToken.Expiry.Before(time.Now()) {
-		oauthToken = authenticateUser()
-		if err := SaveToken(configPathFlag+"/token.json", oauthToken); err != nil {
-			fatal("Failed to save access token: %v", err)
+		// Save the token for future use
+		if err := SaveToken(filepath.Join(configPathFlag, "token.json"), token); err != nil {
+			return fmt.Errorf("failed to save token: %w", err)
 		}
 	}
 
-	tokenClaims, _ := ParseAccessToken(oauthToken.AccessToken)
-	fmt.Printf("👤 User authenticated: %s\n", tokenClaims.Name)
+	claims, _ := ParseAccessToken(token.AccessToken)
+	fmt.Printf("👤 User authenticated: %s\n", claims.Name)
 
-	// Generate a new Ed25519 key pair
 	fmt.Println("🔑 Generating Ed25519 key pair...")
-
 	pubKey, privKey, err := signer.NewSSHKeyPair(signer.Ed25519)
 	if err != nil {
-		fatal("Failed to generate key pair: %v", err)
+		return fmt.Errorf("failed to generate key pair: %w", err)
 	}
 
-	// Submit the public key to Aegis for signing
 	fmt.Println("🚀 Submitting public key to Aegis for signing...")
-
-	signedPubKey, err := submitPublicKeyForAegisSigning(oauthToken.AccessToken, signer.PublicKeySignRequest{
-		PublicKey: pubKey,
-		TTL:       config.TTL,
-	})
+	signedPubKey, err := submitPublicKeyForSigning(cfg, token.AccessToken, pubKey)
 	if err != nil {
-		fatal("Failed to submit public key for signing: %v", err)
+		return fmt.Errorf("signing failed: %w", err)
 	}
 
-	// Save the keys to files
-	saveKeyPair(pubKey, string(signedPubKey), privKey)
-	fmt.Printf("\tPublic key saved to: %s/aegis.pub\n", config.KeyOutputPath)
-	fmt.Printf("\tPrivate key saved to: %s/aegis\n", config.KeyOutputPath)
-	fmt.Printf("\tCertificate saved to: %s/aegis-cert.pub\n", config.KeyOutputPath)
+	saveKeyPair(cfg, pubKey, string(signedPubKey), privKey)
 
+	fmt.Printf("\tPublic key saved to: %s/aegis.pub\n", cfg.KeyOutputPath)
+	fmt.Printf("\tPrivate key saved to: %s/aegis\n", cfg.KeyOutputPath)
+	fmt.Printf("\tCertificate saved to: %s/aegis-cert.pub\n", cfg.KeyOutputPath)
+
+	return nil
+}
+
+func main() {
+	initFlags()
+
+	if err := createAegisConfigDir(); err != nil {
+		fatalf("failed to create config directory: %v", err)
+	}
+
+	cfg, err := loadClientConfig()
+	if err != nil {
+		fatalf(err.Error())
+	}
+
+	if verboseFlag {
+		fmt.Printf("Using configuration: %+v\n", cfg)
+	}
+
+	if err := run(cfg); err != nil {
+		fatalf(err.Error())
+	}
 }
