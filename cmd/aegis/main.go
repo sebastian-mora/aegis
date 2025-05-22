@@ -91,7 +91,7 @@ func authenticateUser(cfg ClientConfig) (*oauth2.Token, error) {
 	return token, nil
 }
 
-func saveKeyPair(cfg ClientConfig, pubKey, signedPubKey, privKey string) {
+func saveKeyPair(cfg ClientConfig, pubKey, signedPubKey, privKey string) error {
 	files := map[string]string{
 		"aegis.pub":      pubKey,
 		"aegis":          privKey,
@@ -101,9 +101,11 @@ func saveKeyPair(cfg ClientConfig, pubKey, signedPubKey, privKey string) {
 	for name, content := range files {
 		path := filepath.Join(cfg.KeyOutputPath, name)
 		if err := WriteKeyToFile(path, content); err != nil {
-			fatalf("failed to write %s: %v", name, err)
+			return fmt.Errorf("failed to write %s: %v", name, err)
 		}
 	}
+
+	return nil
 }
 
 func submitPublicKeyForSigning(cfg ClientConfig, token string, pubKey string) ([]byte, error) {
@@ -145,7 +147,10 @@ func run(cfg ClientConfig) error {
 		return fmt.Errorf("signing failed: %w", err)
 	}
 
-	saveKeyPair(cfg, pubKey, string(signedPubKey), privKey)
+	err = saveKeyPair(cfg, pubKey, string(signedPubKey), privKey)
+	if err != nil {
+		return fmt.Errorf("failed to save key pair: %w", err)
+	}
 
 	fmt.Printf("\tPublic key saved to: %s/aegis.pub\n", cfg.KeyOutputPath)
 	fmt.Printf("\tPrivate key saved to: %s/aegis\n", cfg.KeyOutputPath)

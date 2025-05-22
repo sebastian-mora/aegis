@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -133,6 +134,34 @@ func TestRun_SignError(t *testing.T) {
 		ClientID:      "mock-client-id",
 		AegisEndpoint: signerServer.URL,
 		KeyOutputPath: t.TempDir(),
+		TTL:           1 * time.Hour,
+	}
+
+	err := run(cfg)
+	assert.Error(t, err)
+}
+
+func TestRun_WriteKeyToFileError(t *testing.T) {
+	// Create a temporary directory and remove it to simulate a write error
+	tempDir := t.TempDir()
+	if err := os.Remove(tempDir); err != nil {
+		t.Fatalf("failed to remove temp dir: %v", err)
+	}
+
+	// signer server returns 500 Internal Server Error
+	signerServer := mockSignerServer()
+	defer signerServer.Close()
+
+	deviceCodeServer := mockDeviceCodeServer()
+	defer deviceCodeServer.Close()
+
+	configPathFlag = t.TempDir()
+
+	cfg := ClientConfig{
+		AuthDomain:    deviceCodeServer.URL,
+		ClientID:      "mock-client-id",
+		AegisEndpoint: signerServer.URL,
+		KeyOutputPath: tempDir, // use the removed path here
 		TTL:           1 * time.Hour,
 	}
 
