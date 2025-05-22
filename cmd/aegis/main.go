@@ -34,7 +34,7 @@ func initFlags() {
 }
 
 func loadClientConfig() (ClientConfig, error) {
-	cfg := loadConfig()
+	cfg := loadConfig(configPathFlag)
 
 	// Override with CLI flags if provided
 	if authDomainFlag != "" {
