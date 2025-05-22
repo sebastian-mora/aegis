@@ -78,6 +78,11 @@ func TestRun_Success(t *testing.T) {
 	deviceCodeServer := mockDeviceCodeServer()
 	defer deviceCodeServer.Close()
 
+	// override the config path to a temp dir
+	// this avoids writing to the user's home directory
+	// and allows for easier cleanup after tests
+	configPathFlag = t.TempDir()
+
 	cfg := ClientConfig{
 		AuthDomain:    deviceCodeServer.URL,
 		ClientID:      "mock-client-id",
@@ -110,5 +115,4 @@ func TestRun_InvalidDeviceCode(t *testing.T) {
 
 	err := run(cfg)
 	assert.Error(t, err)
-
 }
