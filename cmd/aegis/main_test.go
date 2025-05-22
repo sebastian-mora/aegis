@@ -54,7 +54,7 @@ func mockDeviceCodeServer() *httptest.Server {
 	mux.HandleFunc("/application/o/device/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"device_code": "mock-device-code", "user_code": "mock-user-code", "verification_uri": "https://mock.verification.uri"}`))
+		w.Write([]byte(`{"device_code": "mock-device-code", "user_code": "mock-user-code", "verification_uri": "https://mock.verification.uri", "interval": 1 }`))
 	})
 
 	mux.HandleFunc("/application/o/token/", func(w http.ResponseWriter, r *http.Request) {
