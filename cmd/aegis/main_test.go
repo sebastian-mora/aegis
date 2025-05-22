@@ -116,3 +116,26 @@ func TestRun_InvalidDeviceCode(t *testing.T) {
 	err := run(cfg)
 	assert.Error(t, err)
 }
+func TestRun_SignError(t *testing.T) {
+	// signer server returns 500 Internal Server Error
+	signerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}))
+	defer signerServer.Close()
+
+	deviceCodeServer := mockDeviceCodeServer()
+	defer deviceCodeServer.Close()
+
+	configPathFlag = t.TempDir()
+
+	cfg := ClientConfig{
+		AuthDomain:    deviceCodeServer.URL,
+		ClientID:      "mock-client-id",
+		AegisEndpoint: signerServer.URL,
+		KeyOutputPath: t.TempDir(),
+		TTL:           1 * time.Hour,
+	}
+
+	err := run(cfg)
+	assert.Error(t, err)
+}
