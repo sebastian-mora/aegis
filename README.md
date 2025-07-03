@@ -56,10 +56,10 @@ make deploy-infra
 
 ### 4. Configure Aegis User Client
 ```bash
-cat <<EOF >> ~/.ssh/aegis_config
+cat <<EOF >> ~/.config/aegis/config
 AUTH_DOMAIN="https://login.example.com"
 CLIENT_ID="ABCD"
-AEGIS_ENDPOINT="https://abcx.execute-api.us-east-1.amazonaws.com/..."
+AEGIS_ENDPOINT="https://abcx.execute-api.us-east-1.amazonaws.com"
 DEFAUlt_TTL="24h"
 EOF
 ```
