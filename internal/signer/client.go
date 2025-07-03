@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -44,7 +45,13 @@ func NewAegisClient(endpoint, accessToken string) *AegisClient {
 // SubmitPublicKey submits a public key to the signing service and returns the signed public key.
 // It takes an access token, the public key, and an optional TTL (time-to-live) for the signed key in minutes.
 func (c *AegisClient) SubmitPublicKey(data PublicKeySignRequest) ([]byte, error) {
-	req, err := http.NewRequest("POST", c.Endpoint, bytes.NewBufferString(data.PublicKey))
+
+	endpoint, err := url.JoinPath(c.Endpoint, "sign_user_key")
+	if err != nil {
+		return nil, fmt.Errorf("failed to join signing endpoint path: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", endpoint, bytes.NewBufferString(data.PublicKey))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to build request: %w", err)
