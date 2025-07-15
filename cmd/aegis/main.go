@@ -29,6 +29,7 @@ func initFlags() {
 	flag.StringVar(&configPathFlag, "config", filepath.Join(os.Getenv("HOME"), ".config/aegis/config"), "Path to the configuration file")
 	flag.StringVar(&keyOutputPathFlag, "key-output-path", filepath.Join(os.Getenv("HOME"), ".ssh"), "Path to save the generated keys")
 	flag.StringVar(&ttlFlag, "ttl", "24h", "Time to live for the signed key")
+	flag.BoolVar(&deviceCodeFlag, "device-code", false, "Use device code flow for authentication")
 	flag.Parse()
 }
 
@@ -60,6 +61,10 @@ func loadClientConfig() (ClientConfig, error) {
 		return cfg, fmt.Errorf("missing required config values (auth-url, client-id, aegis-endpoint)")
 	}
 
+	if deviceCodeFlag {
+		cfg.AuthenticationMethod = "device_code"
+	}
+
 	return cfg, nil
 }
 
@@ -72,8 +77,8 @@ func WriteKeyToFile(path, key string) error {
 	return os.WriteFile(path, []byte(key), 0600)
 }
 
-func getAuthenticator(deviceCode bool) Authenticator {
-	if deviceCode {
+func getAuthenticator(cfg ClientConfig) Authenticator {
+	if cfg.AuthenticationMethod == "device_code" {
 		return &DeviceCodeAuthenticator{}
 	}
 	return &PKCEAuthenticator{}
@@ -84,7 +89,7 @@ func run(cfg ClientConfig) error {
 
 	tokenPath := filepath.Join(filepath.Dir(configPathFlag), "token.json")
 	token, err := LoadToken(tokenPath)
-	auth := getAuthenticator(deviceCodeFlag)
+	auth := getAuthenticator(cfg)
 
 	if err != nil || token == nil || token.Expiry.Before(time.Now()) {
 		token, err = auth.Authenticate(cfg)

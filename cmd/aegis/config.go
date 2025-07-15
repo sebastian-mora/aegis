@@ -10,12 +10,13 @@ import (
 )
 
 type ClientConfig struct {
-	AuthDomain    string
-	ClientID      string
-	AegisEndpoint string
-	Scope         string
-	KeyOutputPath string
-	TTL           time.Duration
+	AuthDomain           string
+	ClientID             string
+	AegisEndpoint        string
+	Scope                string
+	KeyOutputPath        string
+	TTL                  time.Duration
+	AuthenticationMethod string // "device_code" or "pkce"
 }
 
 func createAegisConfigDir() error {
@@ -44,12 +45,13 @@ func loadConfig(file string) ClientConfig {
 	}
 
 	return ClientConfig{
-		AuthDomain:    getEnv("AUTH_DOMAIN", ""),
-		ClientID:      getEnv("CLIENT_ID", ""),
-		AegisEndpoint: getEnv("AEGIS_ENDPOINT", ""),
-		Scope:         getEnv("SCOPE", "openid email profile sign:user_key"),
-		KeyOutputPath: getEnv("KEY_OUTPUT_PATH", filepath.Join(os.Getenv("HOME"), ".ssh")),
-		TTL:           defaultTTL,
+		AuthDomain:           getEnv("AUTH_DOMAIN", ""),
+		ClientID:             getEnv("CLIENT_ID", ""),
+		AegisEndpoint:        getEnv("AEGIS_ENDPOINT", ""),
+		Scope:                getEnv("SCOPE", "openid email profile sign:user_key"),
+		KeyOutputPath:        getEnv("KEY_OUTPUT_PATH", filepath.Join(os.Getenv("HOME"), ".ssh")),
+		TTL:                  defaultTTL,
+		AuthenticationMethod: getAuthenticationMethod(),
 	}
 }
 
@@ -59,4 +61,15 @@ func getEnv(key, defaultVal string) string {
 		return value
 	}
 	return defaultVal
+}
+
+func getAuthenticationMethod() string {
+	method := getEnv("AUTHENTICATION_METHOD", "pkce")
+
+	if method != "device_code" && method != "pkce" {
+		fmt.Printf("Invalid AUTHENTICATION_METHOD: %s. Defaulting to 'pkce'.\n", method)
+		method = "pkce"
+	}
+
+	return method
 }
