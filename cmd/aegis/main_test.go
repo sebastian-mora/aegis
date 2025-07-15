@@ -72,7 +72,7 @@ func mockDeviceCodeServer() *httptest.Server {
 
 	return httptest.NewServer(mux)
 }
-func TestRun_Success(t *testing.T) {
+func TestRun_SucessfulDeviceCode(t *testing.T) {
 	signerServer := mockSignerServer()
 	defer signerServer.Close()
 
@@ -85,11 +85,12 @@ func TestRun_Success(t *testing.T) {
 	configPathFlag = t.TempDir()
 
 	cfg := ClientConfig{
-		AuthDomain:    deviceCodeServer.URL,
-		ClientID:      "mock-client-id",
-		AegisEndpoint: signerServer.URL,
-		KeyOutputPath: t.TempDir(),
-		TTL:           1 * time.Hour,
+		AuthDomain:           deviceCodeServer.URL,
+		ClientID:             "mock-client-id",
+		AegisEndpoint:        signerServer.URL,
+		KeyOutputPath:        t.TempDir(),
+		TTL:                  1 * time.Hour,
+		AuthenticationMethod: "device_code",
 	}
 
 	err := run(cfg)
@@ -107,11 +108,12 @@ func TestRun_InvalidDeviceCode(t *testing.T) {
 	defer signerServer.Close()
 
 	cfg := ClientConfig{
-		AuthDomain:    deviceCodeServer.URL,
-		ClientID:      "mock-client-id",
-		AegisEndpoint: signerServer.URL,
-		KeyOutputPath: t.TempDir(),
-		TTL:           1 * time.Hour,
+		AuthDomain:           deviceCodeServer.URL,
+		ClientID:             "mock-client-id",
+		AegisEndpoint:        signerServer.URL,
+		KeyOutputPath:        t.TempDir(),
+		TTL:                  1 * time.Hour,
+		AuthenticationMethod: "device_code",
 	}
 
 	err := run(cfg)
@@ -130,11 +132,12 @@ func TestRun_SignError(t *testing.T) {
 	configPathFlag = t.TempDir()
 
 	cfg := ClientConfig{
-		AuthDomain:    deviceCodeServer.URL,
-		ClientID:      "mock-client-id",
-		AegisEndpoint: signerServer.URL,
-		KeyOutputPath: t.TempDir(),
-		TTL:           1 * time.Hour,
+		AuthDomain:           deviceCodeServer.URL,
+		ClientID:             "mock-client-id",
+		AegisEndpoint:        signerServer.URL,
+		KeyOutputPath:        t.TempDir(),
+		TTL:                  1 * time.Hour,
+		AuthenticationMethod: "device_code",
 	}
 
 	err := run(cfg)
@@ -158,18 +161,19 @@ func TestRun_WriteKeyToFileError(t *testing.T) {
 	configPathFlag = t.TempDir()
 
 	cfg := ClientConfig{
-		AuthDomain:    deviceCodeServer.URL,
-		ClientID:      "mock-client-id",
-		AegisEndpoint: signerServer.URL,
-		KeyOutputPath: tempDir, // use the removed path here
-		TTL:           1 * time.Hour,
+		AuthDomain:           deviceCodeServer.URL,
+		ClientID:             "mock-client-id",
+		AegisEndpoint:        signerServer.URL,
+		KeyOutputPath:        tempDir, // use the removed path here
+		TTL:                  1 * time.Hour,
+		AuthenticationMethod: "device_code",
 	}
 
 	err := run(cfg)
 	assert.Error(t, err)
 }
 
-func TestLoadClientConfigf(t *testing.T) {
+func TestLoadClientConfig(t *testing.T) {
 	// Create a temporary config file
 	tempFile, err := os.CreateTemp("", "config.json")
 	if err != nil {
@@ -184,6 +188,7 @@ func TestLoadClientConfigf(t *testing.T) {
 	CLIENT_ID=mock-client-id
 	AEGIS_ENDPOINT=https://mock.aegis.endpoint
 	KEY_OUTPUT_PATH=/mock/key/output/path
+	AUTHENTICATION_METHOD=device_code
 	`
 	if _, err := tempFile.WriteString(configData); err != nil {
 		t.Fatalf("failed to write to temp file: %v", err)
@@ -199,4 +204,5 @@ func TestLoadClientConfigf(t *testing.T) {
 	assert.Equal(t, "https://mock.aegis.endpoint", cfg.AegisEndpoint)
 	assert.Equal(t, "/mock/key/output/path", cfg.KeyOutputPath)
 	assert.Equal(t, time.Hour, cfg.TTL)
+	assert.Equal(t, "device_code", cfg.AuthenticationMethod)
 }

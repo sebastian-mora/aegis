@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -36,25 +35,6 @@ type IdTokenClaims struct {
 	Address             string `json:"address"`
 	UpdatedAt           int64  `json:"updated_at"`
 	Exp                 int64  `json:"exp"`
-}
-
-func RequestDeviceCode(ctx context.Context, config *oauth2.Config) (*oauth2.Token, error) {
-	response, err := config.DeviceAuth(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	fmt.Printf("📲 To authenticate, visit: %s\n", response.VerificationURIComplete)
-
-	// Poll for the token
-	token, err := config.DeviceAccessToken(ctx, response)
-	if err != nil {
-		return nil, err
-	}
-
-	// Return the token
-	return token, nil
 }
 
 // Function returns parsed strucutre of the ID token

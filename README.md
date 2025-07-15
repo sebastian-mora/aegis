@@ -61,6 +61,7 @@ AUTH_DOMAIN="https://login.example.com"
 CLIENT_ID="ABCD"
 AEGIS_ENDPOINT="https://abcx.execute-api.us-east-1.amazonaws.com"
 DEFAUlt_TTL="24h"
+AUTHENTICATION_METHOD="pkce"  #(pkce or device_code. pkce is the default if not set)
 EOF
 ```
 

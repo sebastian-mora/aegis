@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -9,7 +8,6 @@ import (
 	"time"
 
 	"github.com/sebastian-mora/aegis/internal/signer"
-	"golang.org/x/oauth2"
 )
 
 var (
@@ -20,6 +18,7 @@ var (
 	configPathFlag    string
 	keyOutputPathFlag string
 	ttlFlag           string
+	deviceCodeFlag    bool
 )
 
 func initFlags() {
@@ -30,6 +29,7 @@ func initFlags() {
 	flag.StringVar(&configPathFlag, "config", filepath.Join(os.Getenv("HOME"), ".config/aegis/config"), "Path to the configuration file")
 	flag.StringVar(&keyOutputPathFlag, "key-output-path", filepath.Join(os.Getenv("HOME"), ".ssh"), "Path to save the generated keys")
 	flag.StringVar(&ttlFlag, "ttl", "24h", "Time to live for the signed key")
+	flag.BoolVar(&deviceCodeFlag, "device-code", false, "Use device code flow for authentication")
 	flag.Parse()
 }
 
@@ -61,6 +61,10 @@ func loadClientConfig() (ClientConfig, error) {
 		return cfg, fmt.Errorf("missing required config values (auth-url, client-id, aegis-endpoint)")
 	}
 
+	if deviceCodeFlag {
+		cfg.AuthenticationMethod = "device_code"
+	}
+
 	return cfg, nil
 }
 
@@ -73,47 +77,11 @@ func WriteKeyToFile(path, key string) error {
 	return os.WriteFile(path, []byte(key), 0600)
 }
 
-func authenticateUser(cfg ClientConfig) (*oauth2.Token, error) {
-	oauthCfg := &oauth2.Config{
-		ClientID: cfg.ClientID,
-		Endpoint: oauth2.Endpoint{
-			DeviceAuthURL: cfg.AuthDomain + "/application/o/device/",
-			TokenURL:      cfg.AuthDomain + "/application/o/token/",
-		},
-		Scopes: []string{cfg.Scope},
+func getAuthenticator(cfg ClientConfig) Authenticator {
+	if cfg.AuthenticationMethod == "device_code" {
+		return &DeviceCodeAuthenticator{}
 	}
-
-	ctx := context.Background()
-	token, err := RequestDeviceCode(ctx, oauthCfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to request device code: %v", err)
-	}
-	return token, nil
-}
-
-func saveKeyPair(cfg ClientConfig, pubKey, signedPubKey, privKey string) error {
-	files := map[string]string{
-		"aegis.pub":      pubKey,
-		"aegis":          privKey,
-		"aegis-cert.pub": signedPubKey,
-	}
-
-	for name, content := range files {
-		path := filepath.Join(cfg.KeyOutputPath, name)
-		if err := WriteKeyToFile(path, content); err != nil {
-			return fmt.Errorf("failed to write %s: %v", name, err)
-		}
-	}
-
-	return nil
-}
-
-func submitPublicKeyForSigning(cfg ClientConfig, token string, pubKey string) ([]byte, error) {
-	client := signer.NewAegisClient(cfg.AegisEndpoint, token)
-	return client.SubmitPublicKey(signer.PublicKeySignRequest{
-		PublicKey: pubKey,
-		TTL:       cfg.TTL,
-	})
+	return &PKCEAuthenticator{}
 }
 
 func run(cfg ClientConfig) error {
@@ -121,9 +89,10 @@ func run(cfg ClientConfig) error {
 
 	tokenPath := filepath.Join(filepath.Dir(configPathFlag), "token.json")
 	token, err := LoadToken(tokenPath)
+	auth := getAuthenticator(cfg)
 
 	if err != nil || token == nil || token.Expiry.Before(time.Now()) {
-		token, err = authenticateUser(cfg)
+		token, err = auth.Authenticate(cfg)
 		if err != nil {
 			return fmt.Errorf("authentication failed: %w", err)
 		}
@@ -159,6 +128,31 @@ func run(cfg ClientConfig) error {
 	fmt.Printf("\tCertificate saved to: %s/aegis-cert.pub\n", cfg.KeyOutputPath)
 
 	return nil
+}
+
+func saveKeyPair(cfg ClientConfig, pubKey, signedPubKey, privKey string) error {
+	files := map[string]string{
+		"aegis.pub":      pubKey,
+		"aegis":          privKey,
+		"aegis-cert.pub": signedPubKey,
+	}
+
+	for name, content := range files {
+		path := filepath.Join(cfg.KeyOutputPath, name)
+		if err := WriteKeyToFile(path, content); err != nil {
+			return fmt.Errorf("failed to write %s: %v", name, err)
+		}
+	}
+
+	return nil
+}
+
+func submitPublicKeyForSigning(cfg ClientConfig, token string, pubKey string) ([]byte, error) {
+	client := signer.NewAegisClient(cfg.AegisEndpoint, token)
+	return client.SubmitPublicKey(signer.PublicKeySignRequest{
+		PublicKey: pubKey,
+		TTL:       cfg.TTL,
+	})
 }
 
 func main() {
