@@ -148,7 +148,17 @@ func (a *DeviceCodeAuthenticator) Authenticate(cfg ClientConfig) (*oauth2.Token,
 		Scopes: []string{cfg.Scope},
 	}
 	ctx := context.Background()
-	token, err := RequestDeviceCode(ctx, oauthCfg)
+
+	// Request device code
+	response, err := oauthCfg.DeviceAuth(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("📲 To authenticate, visit: %s\n", response.VerificationURIComplete)
+
+	// Poll for the token
+	token, err := oauthCfg.DeviceAccessToken(ctx, response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request device code: %v", err)
 	}
