@@ -13,6 +13,12 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// Authenticator interface for authentication flows
+// DeviceCodeAuthenticator and PKCEAuthenticator implement this interface
+type Authenticator interface {
+	Authenticate(cfg ClientConfig) (*oauth2.Token, error)
+}
+
 // PKCEAuthenticator implements the Authenticator interface for local callback (PKCE) flow.
 type PKCEAuthenticator struct{}
 
@@ -125,4 +131,25 @@ func generateState() string {
 		log.Fatalf("failed to generate state: %v", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(state)
+
+}
+
+// DeviceCodeAuthenticator implements the Authenticator interface for device code flow.
+type DeviceCodeAuthenticator struct{}
+
+func (a *DeviceCodeAuthenticator) Authenticate(cfg ClientConfig) (*oauth2.Token, error) {
+	oauthCfg := &oauth2.Config{
+		ClientID: cfg.ClientID,
+		Endpoint: oauth2.Endpoint{
+			DeviceAuthURL: cfg.AuthDomain + "/application/o/device/",
+			TokenURL:      cfg.AuthDomain + "/application/o/token/",
+		},
+		Scopes: []string{cfg.Scope},
+	}
+	ctx := context.Background()
+	token, err := RequestDeviceCode(ctx, oauthCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to request device code: %v", err)
+	}
+	return token, nil
 }

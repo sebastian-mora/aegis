@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -9,7 +8,6 @@ import (
 	"time"
 
 	"github.com/sebastian-mora/aegis/internal/signer"
-	"golang.org/x/oauth2"
 )
 
 var (
@@ -72,32 +70,6 @@ func fatalf(format string, args ...any) {
 
 func WriteKeyToFile(path, key string) error {
 	return os.WriteFile(path, []byte(key), 0600)
-}
-
-// Authenticator interface for authentication flows
-// DeviceCodeAuthenticator and PKCEAuthenticator implement this interface
-
-type Authenticator interface {
-	Authenticate(cfg ClientConfig) (*oauth2.Token, error)
-}
-
-type DeviceCodeAuthenticator struct{}
-
-func (a *DeviceCodeAuthenticator) Authenticate(cfg ClientConfig) (*oauth2.Token, error) {
-	oauthCfg := &oauth2.Config{
-		ClientID: cfg.ClientID,
-		Endpoint: oauth2.Endpoint{
-			DeviceAuthURL: cfg.AuthDomain + "/application/o/device/",
-			TokenURL:      cfg.AuthDomain + "/application/o/token/",
-		},
-		Scopes: []string{cfg.Scope},
-	}
-	ctx := context.Background()
-	token, err := RequestDeviceCode(ctx, oauthCfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to request device code: %v", err)
-	}
-	return token, nil
 }
 
 func getAuthenticator(deviceCode bool) Authenticator {
