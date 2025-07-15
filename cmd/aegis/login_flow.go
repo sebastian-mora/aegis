@@ -21,8 +21,6 @@ type Authenticator interface {
 
 // PKCEAuthenticator implements the Authenticator interface for local callback (PKCE) flow.
 type PKCEAuthenticator struct {
-	// For testing: optional hook to intercept authURL and state
-	OnAuthURL func(authURL, state string)
 }
 
 func (a *PKCEAuthenticator) Authenticate(cfg ClientConfig) (*oauth2.Token, error) {
@@ -41,11 +39,7 @@ func (a *PKCEAuthenticator) Authenticate(cfg ClientConfig) (*oauth2.Token, error
 	state := generateState()
 	authURL := buildAuthURL(oauthCfg, state, codeChallenge)
 
-	if a.OnAuthURL != nil {
-		a.OnAuthURL(authURL, state)
-	} else {
-		fmt.Printf("Go to the following URL to authenticate:\n\n%s\n\n", authURL)
-	}
+	fmt.Printf("📲 To authenticate, visit: %s\n", authURL)
 
 	codeCh := make(chan string)
 	server := &http.Server{}
