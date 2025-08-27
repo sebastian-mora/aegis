@@ -19,6 +19,7 @@ module "aeige_cert_signer" {
   lambda_s3_bucket    = var.lambda_s3_bucket
   lambda_s3_key       = var.lambda_s3_key
   lambda_runtime      = var.lambda_runtime
+  lambda_zip_sha256   = var.lambda_zip_sha256
 }
 
 output "apigw_url" {

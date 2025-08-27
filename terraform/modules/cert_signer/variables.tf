@@ -44,3 +44,8 @@ variable "lambda_runtime" {
   type        = string
   default = "provided.al2023"
 }
+
+variable "lambda_zip_sha256" {
+  description = "SHA256 hash of the Lambda deployment package"
+  type        = string
+}
