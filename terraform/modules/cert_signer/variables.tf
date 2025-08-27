@@ -29,8 +29,18 @@ variable "jsme_expression" {
   description = "JSME Path expression that maps OAUTH attributes to SSH Cert Principals"
 }
 
+variable "lambda_s3_bucket" {
+  description = "S3 bucket containing the Lambda deployment package"
+  type        = string
+}
 
-variable "lambda_zip_path" {
-  type    = string
-  default = "../build/lambda.zip"
+variable "lambda_s3_key" {
+  description = "S3 key for the Lambda deployment package"
+  type        = string
+}
+
+variable "lambda_runtime" {
+  description = "Lambda runtime"
+  type        = string
+  default = "provided.al2023"
 }
