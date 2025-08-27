@@ -49,7 +49,78 @@ resource "aws_apigatewayv2_stage" "prod" {
   name        = var.stage_name
   auto_deploy = true
 
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.apigw_access_logs.arn
+    format = jsonencode({
+      accountId       = "$context.accountId"
+      apiId           = "$context.apiId"
+      requestId       = "$context.requestId"
+      sourceIp        = "$context.identity.sourceIp"
+      userAgent       = "$context.identity.userAgent"
+      requestTime     = "$context.requestTime"
+      httpMethod      = "$context.httpMethod"
+      routeKey        = "$context.routeKey"
+      status          = "$context.status"
+      protocol        = "$context.protocol"
+      responseLength  = "$context.responseLength"
+      authorizerError = "$context.authorizer.error"
+    })
+  }
+
   depends_on = [
     aws_apigatewayv2_route.sign
   ]
+
+}
+
+// Create CloudWatch Log Group for API Gateway access logs
+resource "aws_cloudwatch_log_group" "apigw_access_logs" {
+  name = "/aws/apigateway/${local.name}"
+}
+
+
+// Create API Gateway Account for logging
+resource "aws_api_gateway_account" "apgw_account" {
+  cloudwatch_role_arn = aws_iam_role.cloudwatch.arn
+}
+
+data "aws_iam_policy_document" "assume_role" {
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["apigateway.amazonaws.com"]
+    }
+
+    actions = ["sts:AssumeRole"]
+  }
+}
+
+resource "aws_iam_role" "cloudwatch" {
+  name               = "api_gateway_cloudwatch_global"
+  assume_role_policy = data.aws_iam_policy_document.assume_role.json
+}
+
+data "aws_iam_policy_document" "cloudwatch" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams",
+      "logs:PutLogEvents",
+      "logs:GetLogEvents",
+      "logs:FilterLogEvents",
+    ]
+
+    resources = ["*"]
+  }
+}
+resource "aws_iam_role_policy" "cloudwatch" {
+  name   = "default"
+  role   = aws_iam_role.cloudwatch.id
+  policy = data.aws_iam_policy_document.cloudwatch.json
 }
