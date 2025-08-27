@@ -1,3 +1,6 @@
+terraform {
+  backend "remote" {}
+}
 
 provider "aws" {
   region = var.region
@@ -13,7 +16,9 @@ module "aeige_cert_signer" {
   // lambda vars
   user_ca_secret_name = var.user_ca_secret_name
   jsme_expression     = var.jsme_expression
-  lambda_zip_path     = var.lambda_zip_path
+  lambda_s3_bucket    = var.lambda_s3_bucket
+  lambda_s3_key       = var.lambda_s3_key
+  lambda_runtime      = var.lambda_runtime
 }
 
 output "apigw_url" {
