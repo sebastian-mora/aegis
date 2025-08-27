@@ -1,11 +1,7 @@
-terraform {
-  backend "s3" {}
-}
 
 provider "aws" {
   region = var.region
 }
-
 
 module "aeige_cert_signer" {
   source       = "./modules/cert_signer"

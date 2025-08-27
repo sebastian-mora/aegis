@@ -3,10 +3,6 @@ variable "region" {
   type    = string
 }
 
-variable "profile" {
-  default = "default"
-  type    = string
-}
 
 variable "jwt_audience" {
   description = "The audience for JWT"
