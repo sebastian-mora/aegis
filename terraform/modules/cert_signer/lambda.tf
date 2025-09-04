@@ -70,12 +70,13 @@ resource "aws_lambda_permission" "allow_apigw_to_invoke" {
 resource "aws_lambda_function" "ssh_cert_signer" {
   function_name = "aeige_lambda"
   role          = aws_iam_role.lambda_role.arn
+  package_type  = "Zip"
+  s3_bucket     = var.lambda_s3_bucket
+  s3_key        = var.lambda_s3_key
+  source_code_hash = var.lambda_zip_sha256 != "" ? var.lambda_zip_sha256 : null
   handler       = "bootstrap"
-  runtime       = "provided.al2023"
+  runtime       = var.lambda_runtime
   architectures = ["x86_64"]
-
-  filename         = var.lambda_zip_path
-  source_code_hash = filebase64sha256(var.lambda_zip_path)
 
   environment {
     variables = {
