@@ -73,7 +73,7 @@ resource "aws_lambda_function" "ssh_cert_signer" {
   package_type  = "Zip"
   s3_bucket     = var.lambda_s3_bucket
   s3_key        = var.lambda_s3_key
-  source_code_hash = var.lambda_zip_sha256
+  source_code_hash = var.lambda_zip_sha256 != "" ? var.lambda_zip_sha256 : null
   handler       = "bootstrap"
   runtime       = var.lambda_runtime
   architectures = ["x86_64"]

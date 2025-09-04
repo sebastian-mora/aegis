@@ -48,4 +48,5 @@ variable "lambda_runtime" {
 variable "lambda_zip_sha256" {
   description = "SHA256 hash of the Lambda deployment package"
   type        = string
+  default     = ""
 }
