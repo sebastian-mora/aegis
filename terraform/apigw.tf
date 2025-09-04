@@ -1,8 +1,5 @@
 locals {
   name = "${var.stage_name}-${var.api_name}"
-  scopes = {
-    sign_user_key = "sign:user_key"
-  }
 }
 
 resource "aws_apigatewayv2_api" "api" {
@@ -38,9 +35,8 @@ resource "aws_apigatewayv2_route" "sign" {
   route_key = "POST /sign_user_key"
   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}" # Updated target for Lambda integration
 
-  authorization_type   = "JWT"
-  authorizer_id        = aws_apigatewayv2_authorizer.odic_auth.id
-  authorization_scopes = [local.scopes.sign_user_key]
+  authorization_type = "JWT"
+  authorizer_id      = aws_apigatewayv2_authorizer.odic_auth.id
 }
 
 
