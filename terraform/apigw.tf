@@ -1,8 +1,5 @@
 locals {
   name = "${var.stage_name}-${var.api_name}"
-  scopes = {
-    sign_user_key = "sign:user_key"
-  }
 }
 
 resource "aws_apigatewayv2_api" "api" {
@@ -40,7 +37,6 @@ resource "aws_apigatewayv2_route" "sign" {
 
   authorization_type   = "JWT"
   authorizer_id        = aws_apigatewayv2_authorizer.odic_auth.id
-  authorization_scopes = [local.scopes.sign_user_key]
 }
 
 
