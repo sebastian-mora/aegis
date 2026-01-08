@@ -71,7 +71,7 @@ resource "aws_apigatewayv2_stage" "prod" {
 
 // Create CloudWatch Log Group for API Gateway access logs
 resource "aws_cloudwatch_log_group" "apigw_access_logs" {
-  name = "/aws/apigateway/${local.name}"
+  name = "/aws/apigateway/${local.name}-access-logs"
 }
 
 
@@ -94,7 +94,7 @@ data "aws_iam_policy_document" "assume_role" {
 }
 
 resource "aws_iam_role" "cloudwatch" {
-  name               = "api_gateway_cloudwatch_global"
+  name               = "${var.stage_name}-api-gateway-cloudwatch-global"
   assume_role_policy = data.aws_iam_policy_document.assume_role.json
 }
 

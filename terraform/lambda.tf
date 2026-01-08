@@ -13,7 +13,7 @@ data "archive_file" "lambda_zip" {
 }
 
 resource "aws_iam_role" "lambda_role" {
-  name = "lambda-ssh-cert-signing-role"
+  name = "${var.stage_name}-lambda-ssh-cert-signing-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -29,7 +29,7 @@ resource "aws_iam_role" "lambda_role" {
 }
 
 resource "aws_iam_role_policy" "lambda_secrets_policy" {
-  name = "lambda-ssh-cert-signing-policy"
+  name = "${var.stage_name}-lambda-ssh-cert-signing-policy"
   role = aws_iam_role.lambda_role.id
 
   policy = jsonencode({
@@ -45,7 +45,7 @@ resource "aws_iam_role_policy" "lambda_secrets_policy" {
 }
 
 resource "aws_iam_role_policy" "lambda_write_audit_event" {
-  name = "lambda-ssh-cert-allow-db-write"
+  name = "${var.stage_name}-lambda-ssh-cert-allow-db-write"
   role = aws_iam_role.lambda_role.id
 
   policy = jsonencode({
@@ -74,7 +74,7 @@ resource "aws_lambda_permission" "allow_apigw_to_invoke" {
 }
 
 resource "aws_lambda_function" "ssh_cert_signer" {
-  function_name    = "aegis_lambda"  
+  function_name    = "${var.stage_name}-aegis-ssh-cert-signer"  
   role             = aws_iam_role.lambda_role.arn
   package_type     = "Zip"
   filename         = data.archive_file.lambda_zip.output_path 
