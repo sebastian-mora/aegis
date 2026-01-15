@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sebastian-mora/aegis/internal/audit"
+	"github.com/sebastian-mora/aegis/internal/logger"
 	signerPkg "github.com/sebastian-mora/aegis/internal/signer"
 	"golang.org/x/crypto/ssh"
 )
@@ -56,7 +56,6 @@ func NewSignerHandler(s signerPkg.Signer, pm signerPkg.PrincipalMapper, ar audit
 
 // SignRequest processes a signing request and returns a signed certificate
 func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*SigningResponse, error) {
-	slog.Info("Processing certificate signing request")
 	var certificateExpiration = time.Duration(24 * time.Hour)
 
 	// Parse JWT claims
@@ -64,7 +63,6 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUnauthorized, err)
 	}
-	slog.Info("Parsed JWT claims", "claims", parsedTokenClaims)
 
 	// Extract required claims
 	aud, audOk := parsedTokenClaims["aud"].(string)
@@ -73,14 +71,18 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 		return nil, fmt.Errorf("%w: missing required claims", ErrUnauthorized)
 	}
 
+	// Add subject to context for logging
+	ctx = context.WithValue(ctx, logger.SubjectKey, sub)
+
+	logger.Info(ctx, "Processing certificate signing request", "claims", parsedTokenClaims)
+
 	// Map JWT claims to SSH principals
 	principals, err := h.principalMapper.Map(parsedTokenClaims)
 	if err != nil {
-		slog.Error("failed to map principals from JWT claims", "error", err)
+		logger.Error(ctx, "failed to map principals from JWT claims", "error", err)
 		return nil, fmt.Errorf("%w: %v", ErrInternalServer, err)
 	}
-	slog.Info("Mapped principals from JWT claims", "principals", principals)
-
+	logger.Info(ctx, "Mapped principals from JWT claims", "principals", principals)
 	// Parse public key from request
 	pubKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(req.PublicKey))
 	if err != nil {
@@ -93,7 +95,7 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 		if err != nil {
 			return nil, fmt.Errorf("%w: failed to parse ttl", ErrInvalidRequest)
 		}
-		slog.Info("Parsed TTL from request", "ttl", ttl)
+		logger.Info(ctx, "Parsed TTL from request", "ttl", ttl)
 		certificateExpiration = ttl
 	}
 
@@ -102,7 +104,7 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign certificate: %w", err)
 	}
-	slog.Info("Successfully signed certificate", "certificate", userSSHCert.KeyId)
+	logger.Info(ctx, "Successfully signed certificate", "certificate", userSSHCert.KeyId)
 
 	// Return the SSH certificate
 	certString := string(ssh.MarshalAuthorizedKey(userSSHCert))
@@ -123,10 +125,10 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 
 	if err := h.auditRepo.Write(keySignEvent); err != nil {
 		// note: If audit logging fails, we log the error but do not fail the signing operation
-		slog.Error("failed to write audit log", "error", err)
+		logger.Error(ctx, "failed to write audit log", "error", err)
 	}
 
-	slog.Info("certificate signed successfully", "principals", principals)
+	logger.Info(ctx, "certificate signed successfully", "principals", principals)
 
 	return &SigningResponse{
 		Certificate: certString,
