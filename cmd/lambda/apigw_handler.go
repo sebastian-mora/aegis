@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/sebastian-mora/aegis/internal/handler"
+	"github.com/sebastian-mora/aegis/internal/logger"
 )
 
 // APIGatewayHandler handles API Gateway V2 HTTP requests and delegates to a Signer
@@ -24,6 +26,18 @@ func NewAPIGatewayHandler(signer handler.Signer) *APIGatewayHandler {
 
 // Handle processes an API Gateway V2 HTTP request
 func (h *APIGatewayHandler) Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+
+	// Add context about the Lambda invocation
+	lambdaCtx, ok := lambdacontext.FromContext(ctx)
+	if ok {
+		ctx = context.WithValue(ctx, logger.AWSRequestIDKey, lambdaCtx.AwsRequestID)
+		ctx = context.WithValue(ctx, logger.FunctionARNKey, lambdaCtx.InvokedFunctionArn)
+	}
+
+	// Add API Gateway request ID
+	ctx = context.WithValue(ctx, logger.RequestIDKey, event.RequestContext.RequestID)
+	ctx = context.WithValue(ctx, logger.SourceIPKey, event.RequestContext.HTTP.SourceIP)
+
 	// Extract authorization token
 	authHeader := event.Headers["authorization"]
 	if authHeader == "" {
