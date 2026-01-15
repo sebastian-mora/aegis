@@ -11,7 +11,6 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sebastian-mora/aegis/internal/audit"
-	"github.com/sebastian-mora/aegis/internal/handler"
 	"github.com/sebastian-mora/aegis/internal/signer"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/ssh"
@@ -37,12 +36,13 @@ func setupHandler(jsmeExpression string) func(ctx context.Context, event events.
 	caPrivateKey, _, _ := generateSSHKey()
 	caCertSigner, _ := ssh.NewSignerFromKey(caPrivateKey)
 
-	sshSigner := signer.NewSSHCASigner(caCertSigner)
-
 	principalMapper, _ := signer.NewJMESPathPrincipalMapper(jsmeExpression)
 
-	signerHandler := handler.NewSignerHandler(sshSigner, principalMapper, &MockAuditRepo{})
-	apigwHandler := NewAPIGatewayHandler(signerHandler)
+	apigwHandler, _ := initialize(context.Background(),
+		WithCACertSigner(caCertSigner),
+		WithPrincipalMapper(principalMapper),
+		WithAuditStore(&MockAuditRepo{}),
+	)
 
 	return apigwHandler.Handle
 }
@@ -159,7 +159,7 @@ func TestLambdaHandlerWithNoMatchingClaims(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 500, resp.StatusCode)
 
-	assert.Contains(t, resp.Body, "no principals matched from token")
+	assert.Contains(t, resp.Body, "no matches found for expression")
 
 }
 
