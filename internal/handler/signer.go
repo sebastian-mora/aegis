@@ -10,6 +10,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sebastian-mora/aegis/internal/audit"
 	"github.com/sebastian-mora/aegis/internal/logger"
+	"github.com/sebastian-mora/aegis/internal/principals"
 	signerPkg "github.com/sebastian-mora/aegis/internal/signer"
 	"golang.org/x/crypto/ssh"
 )
@@ -41,12 +42,12 @@ type Signer interface {
 // SignerHandler implements the Signer interface
 type SignerHandler struct {
 	signer          signerPkg.CertificateSigner
-	principalMapper signerPkg.PrincipalMapper
+	principalMapper principals.PrincipalMapper
 	auditRepo       audit.AuditWriter
 }
 
 // NewSignerHandler creates a new SignerHandler with the provided dependencies
-func NewSignerHandler(s signerPkg.CertificateSigner, pm signerPkg.PrincipalMapper, ar audit.AuditWriter) *SignerHandler {
+func NewSignerHandler(s signerPkg.CertificateSigner, pm principals.PrincipalMapper, ar audit.AuditWriter) *SignerHandler {
 	return &SignerHandler{
 		signer:          s,
 		principalMapper: pm,

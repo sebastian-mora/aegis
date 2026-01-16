@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sebastian-mora/aegis/internal/audit"
+	"github.com/sebastian-mora/aegis/internal/principals"
 	"github.com/sebastian-mora/aegis/internal/signer"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/ssh"
@@ -63,7 +64,7 @@ func setupHandler(jsmeExpression string, t *testing.T) func(ctx context.Context,
 		t.Fatalf("Failed to create KMSSigner: %v", err)
 	}
 
-	principalMapper, _ := signer.NewJMESPathPrincipalMapper(jsmeExpression)
+	principalMapper, _ := principals.NewJMESPathPrincipalMapper(jsmeExpression)
 
 	apigwHandler, _ := initialize(context.Background(),
 		WithCACertSigner(sshSigner),

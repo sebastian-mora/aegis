@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/sebastian-mora/aegis/internal/audit"
 	"github.com/sebastian-mora/aegis/internal/handler"
+	"github.com/sebastian-mora/aegis/internal/principals"
 	"github.com/sebastian-mora/aegis/internal/signer"
 )
 
@@ -30,7 +31,7 @@ type lambdaConfig struct {
 // InitOptions holds optional dependencies for initialization
 type InitOptions struct {
 	CACertSigner    signer.CertificateSigner
-	PrincipalMapper signer.PrincipalMapper
+	PrincipalMapper principals.PrincipalMapper
 	AuditStore      audit.AuditWriter
 }
 
@@ -42,7 +43,7 @@ func WithCACertSigner(signer signer.CertificateSigner) InitOption {
 	}
 }
 
-func WithPrincipalMapper(mapper signer.PrincipalMapper) InitOption {
+func WithPrincipalMapper(mapper principals.PrincipalMapper) InitOption {
 	return func(o *InitOptions) {
 		o.PrincipalMapper = mapper
 	}
@@ -104,7 +105,7 @@ func loadDefaultOptions(ctx context.Context) (*InitOptions, error) {
 	}
 
 	// Create principal mapper from JMESPath expression
-	principalMapper, err := signer.NewJMESPathPrincipalMapper(cfg.JMESPathExpression)
+	principalMapper, err := principals.NewJMESPathPrincipalMapper(cfg.JMESPathExpression)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create principal mapper: %w", err)
 	}
