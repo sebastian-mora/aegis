@@ -58,7 +58,7 @@ func setupHandler(jsmeExpression string, t *testing.T) func(ctx context.Context,
 	mockKMS := NewMockKMSAPI(t)
 
 	// Create a real KMSSigner backed by the mock KMS API
-	sshSigner, err := signer.NewKMSSigner(context.Background(), mockKMS, "test-key-id")
+	sshSigner, err := signer.NewSSHCertSigner(context.Background(), mockKMS, "test-key-id")
 	if err != nil {
 		t.Fatalf("Failed to create KMSSigner: %v", err)
 	}

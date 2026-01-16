@@ -98,7 +98,7 @@ func loadDefaultOptions(ctx context.Context) (*InitOptions, error) {
 	kmcClient := kms.NewFromConfig(awsCfg)
 
 	// Create SSH CA Signer from KMS-backed key
-	caCertSigner, err := signer.NewKMSSigner(initCtx, signer.NewAWSKMSClient(kmcClient), cfg.KmsKeyId)
+	caCertSigner, err := signer.NewSSHCertSigner(initCtx, signer.NewAWSKMSClient(kmcClient), cfg.KmsKeyId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create KMS SSH CA Signer: %w", err)
 	}

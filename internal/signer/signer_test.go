@@ -60,7 +60,7 @@ func TestSign(t *testing.T) {
 		})
 
 	// Create a new KMSSigner with the mocked KMS client
-	sshSigner, err := signer.NewKMSSigner(context.TODO(), kmsClient, "id-123")
+	sshSigner, err := signer.NewSSHCertSigner(context.TODO(), kmsClient, "id-123")
 	if err != nil {
 		t.Fatalf("Failed to create KMSSigner: %v", err)
 	}
