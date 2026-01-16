@@ -7,36 +7,36 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/sebastian-mora/aegis/internal/audit"
 	"github.com/sebastian-mora/aegis/internal/handler"
 	"github.com/sebastian-mora/aegis/internal/signer"
-	"golang.org/x/crypto/ssh"
 )
 
 // Environment variable names
 const (
-	envSecretName         = "USER_CA_KEY_NAME"
+	envKMSKeyID           = "KMS_KEY_ID"
 	envJMESPathExpression = "JSME_PATH_EXPRESSION"
 	envDynamoDBTable      = "DYNAMO_DB_TABLE"
 )
 
 // lambdaConfig holds configuration loaded from environment
 type lambdaConfig struct {
-	SecretName         string
+	KmsKeyId           string
 	JMESPathExpression string
 	DynamoDBTableName  string
 }
 
 // InitOptions holds optional dependencies for initialization
 type InitOptions struct {
-	CACertSigner    ssh.Signer
+	CACertSigner    signer.CertificateSigner
 	PrincipalMapper signer.PrincipalMapper
 	AuditStore      audit.AuditWriter
 }
 
 type InitOption func(*InitOptions)
 
-func WithCACertSigner(signer ssh.Signer) InitOption {
+func WithCACertSigner(signer signer.CertificateSigner) InitOption {
 	return func(o *InitOptions) {
 		o.CACertSigner = signer
 	}
@@ -57,14 +57,14 @@ func WithAuditStore(store audit.AuditWriter) InitOption {
 // loadConfig loads and validates environment configuration
 func loadConfig() (*lambdaConfig, error) {
 	cfg := &lambdaConfig{
-		SecretName:         os.Getenv(envSecretName),
+		KmsKeyId:           os.Getenv(envKMSKeyID),
 		JMESPathExpression: os.Getenv(envJMESPathExpression),
 		DynamoDBTableName:  os.Getenv(envDynamoDBTable),
 	}
 
 	// Validate required fields
-	if cfg.SecretName == "" {
-		return nil, fmt.Errorf("missing required env var: %s", envSecretName)
+	if cfg.KmsKeyId == "" {
+		return nil, fmt.Errorf("missing required env var: %s", envKMSKeyID)
 	}
 	if cfg.JMESPathExpression == "" {
 		return nil, fmt.Errorf("missing required env var: %s", envJMESPathExpression)
@@ -94,16 +94,13 @@ func loadDefaultOptions(ctx context.Context) (*InitOptions, error) {
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
 	}
 
-	// Load CA certificate from Secrets Manager
-	caCert, err := GetSecretFromSecretsManager(initCtx, awsCfg, cfg.SecretName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load CA certificate: %w", err)
-	}
+	// Create KMS client
+	kmcClient := kms.NewFromConfig(awsCfg)
 
-	// Parse SSH private key
-	caCertSigner, err := ssh.ParsePrivateKey([]byte(caCert))
+	// Create SSH CA Signer from KMS-backed key
+	caCertSigner, err := signer.NewKMSSigner(initCtx, signer.NewAWSKMSClient(kmcClient), cfg.KmsKeyId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse SSH private key: %w", err)
+		return nil, fmt.Errorf("failed to create KMS SSH CA Signer: %w", err)
 	}
 
 	// Create principal mapper from JMESPath expression
@@ -144,11 +141,8 @@ func initialize(ctx context.Context, opts ...InitOption) (*APIGatewayHandler, er
 		}
 	}
 
-	// Initialize SSH signer
-	sshSigner := signer.NewSSHCASigner(options.CACertSigner)
-
 	// Create signer handler with injected dependencies
-	signerHandler := handler.NewSignerHandler(sshSigner, options.PrincipalMapper, options.AuditStore)
+	signerHandler := handler.NewSignerHandler(options.CACertSigner, options.PrincipalMapper, options.AuditStore)
 
 	// Create API Gateway handler
 	apigwHandler := NewAPIGatewayHandler(signerHandler)

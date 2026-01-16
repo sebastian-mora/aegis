@@ -66,7 +66,7 @@ func setupHandler(jsmeExpression string, t *testing.T) func(ctx context.Context,
 	principalMapper, _ := signer.NewJMESPathPrincipalMapper(jsmeExpression)
 
 	apigwHandler, _ := initialize(context.Background(),
-		WithCACertSigner(caCertSigner),
+		WithCACertSigner(sshSigner),
 		WithPrincipalMapper(principalMapper),
 		WithAuditStore(&MockAuditRepo{}),
 	)

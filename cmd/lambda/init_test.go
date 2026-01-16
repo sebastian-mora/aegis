@@ -18,12 +18,12 @@ func TestLoadConfig(t *testing.T) {
 		{
 			name: "valid config",
 			setupEnv: map[string]string{
-				envSecretName:         "test-secret",
+				envKMSKeyID:           "test-key-id",
 				envJMESPathExpression: "email",
 				envDynamoDBTable:      "test-table",
 			},
 			expectCfg: &lambdaConfig{
-				SecretName:         "test-secret",
+				KmsKeyId:           "test-key-id",
 				JMESPathExpression: "email",
 				DynamoDBTableName:  "test-table",
 			},
@@ -34,12 +34,12 @@ func TestLoadConfig(t *testing.T) {
 				envJMESPathExpression: "email",
 				envDynamoDBTable:      "test-table",
 			},
-			expectErr: "missing required env var: USER_CA_KEY_NAME",
+			expectErr: "missing required env var: KMS_KEY_ID",
 		},
 		{
 			name: "missing JMESPath expression",
 			setupEnv: map[string]string{
-				envSecretName:    "test-secret",
+				envKMSKeyID:      "test-key-id",
 				envDynamoDBTable: "test-table",
 			},
 			expectErr: "missing required env var: JSME_PATH_EXPRESSION",
@@ -47,7 +47,7 @@ func TestLoadConfig(t *testing.T) {
 		{
 			name: "missing DynamoDB table",
 			setupEnv: map[string]string{
-				envSecretName:         "test-secret",
+				envKMSKeyID:           "test-key-id",
 				envJMESPathExpression: "email",
 			},
 			expectErr: "missing required env var: DYNAMO_DB_TABLE",
@@ -57,7 +57,7 @@ func TestLoadConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clear existing env vars
-			os.Unsetenv(envSecretName)
+			os.Unsetenv(envKMSKeyID)
 			os.Unsetenv(envJMESPathExpression)
 			os.Unsetenv(envDynamoDBTable)
 
@@ -66,7 +66,7 @@ func TestLoadConfig(t *testing.T) {
 				os.Setenv(k, v)
 			}
 			defer func() {
-				os.Unsetenv(envSecretName)
+				os.Unsetenv(envKMSKeyID)
 				os.Unsetenv(envJMESPathExpression)
 				os.Unsetenv(envDynamoDBTable)
 			}()
