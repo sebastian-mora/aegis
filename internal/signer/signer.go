@@ -10,7 +10,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"golang.org/x/crypto/ssh"
@@ -22,19 +21,13 @@ type CertificateSigner interface {
 
 // KMSSigner provides SSH certificate signing using KMS
 type KMSSigner struct {
-	kmsClient *kms.Client
+	kmsClient AwsKMSApi
 	keyID     string
-	publicKey ssh.PublicKey
+	publicKey crypto.PublicKey
 	sshSigner ssh.Signer
 }
 
-func NewKMSSigner(ctx context.Context, keyID string) (*KMSSigner, error) {
-	cfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load AWS config: %w", err)
-	}
-
-	kmsClient := kms.NewFromConfig(cfg)
+func NewKMSSigner(ctx context.Context, kmsClient AwsKMSApi, keyID string) (*KMSSigner, error) {
 
 	// Get the public key from KMS
 	pubKeyResp, err := kmsClient.GetPublicKey(ctx, &kms.GetPublicKeyInput{
@@ -58,7 +51,7 @@ func NewKMSSigner(ctx context.Context, keyID string) (*KMSSigner, error) {
 	s := &KMSSigner{
 		kmsClient: kmsClient,
 		keyID:     keyID,
-		publicKey: ssh.PublicKey(rsaPubKey),
+		publicKey: rsaPubKey,
 	}
 
 	// Convert crypto.Signer to ssh.Signer
@@ -68,7 +61,6 @@ func NewKMSSigner(ctx context.Context, keyID string) (*KMSSigner, error) {
 	}
 
 	s.sshSigner = sshSigner
-	s.caPublicKey = sshSigner.PublicKey()
 
 	return s, nil
 }
@@ -92,7 +84,7 @@ func (s *KMSSigner) Sign(certType uint32, publicKey ssh.PublicKey, principals []
 				"permit-user-rc":          "",
 			},
 		},
-		SignatureKey: s.caPublicKey,
+		SignatureKey: s.PublicKey(),
 	}
 
 	if err := cert.SignCert(rand.Reader, s.sshSigner); err != nil {
@@ -100,6 +92,14 @@ func (s *KMSSigner) Sign(certType uint32, publicKey ssh.PublicKey, principals []
 	}
 
 	return cert, nil
+}
+
+func (s *KMSSigner) PublicKey() ssh.PublicKey {
+	sshPubKey, err := ssh.NewPublicKey(s.publicKey)
+	if err != nil {
+		panic(fmt.Sprintf("failed to convert public key to SSH format: %v", err))
+	}
+	return sshPubKey
 }
 
 // kmsSignerAdapter adapts KMSSigner to implement crypto.Signer for use with ssh.NewSignerFromSigner

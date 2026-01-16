@@ -1,35 +1,23 @@
 package signer_test
 
 import (
+	"context"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/sebastian-mora/aegis/internal/signer"
 	"golang.org/x/crypto/ssh"
 )
 
-func generateSSHKey() (*rsa.PrivateKey, *ssh.PublicKey, error) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, nil, err
-	}
-	publicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
-	if err != nil {
-		return nil, nil, err
-	}
-	return privateKey, &publicKey, nil
-}
-
 func TestSign(t *testing.T) {
-	// Generate a new SSH key pair for CA
-	caPrivateKey, _, err := generateSSHKey()
-	if err != nil {
-		t.Fatalf("Failed to generate CA key pair: %v", err)
-	}
 
-	// Generate a new Ed25519 key pair
+	// Generate a user Ed25519 key pair to sign
 	publicKeyStr, _, err := signer.NewSSHKeyPair(signer.Ed25519)
 	if err != nil {
 		t.Fatalf("Failed to generate key pair: %v", err)
@@ -40,14 +28,42 @@ func TestSign(t *testing.T) {
 		t.Fatalf("Failed to parse public key: %v", err)
 	}
 
-	// Create ssh.Signer from the private key
-	caCertSigner, err := ssh.NewSignerFromKey(caPrivateKey)
+	// Generate a real RSA key for the CA signer
+	rsaPrivKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		t.Fatalf("Failed to create SSH signer from CA private key: %v", err)
+		t.Fatalf("Failed to generate RSA key: %v", err)
 	}
 
-	// Create a new SSHCASigner with the generated private key
-	sshSigner := signer.NewSSHCASigner(caCertSigner)
+	// Encode public key to DER format (as KMS would return it)
+	pubKeyDER, err := x509.MarshalPKIXPublicKey(&rsaPrivKey.PublicKey)
+	if err != nil {
+		t.Fatalf("Failed to marshal public key: %v", err)
+	}
+
+	// Create a mock KMS client with real RSA signing
+	kmsClient := NewMockKMSClient().
+		WithGetPublicKey(func(ctx context.Context, params *kms.GetPublicKeyInput, optFns ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error) {
+			return &kms.GetPublicKeyOutput{
+				PublicKey: pubKeyDER,
+			}, nil
+		}).
+		WithSign(func(ctx context.Context, params *kms.SignInput, optFns ...func(*kms.Options)) (*kms.SignOutput, error) {
+			// Perform real RSA signing with SHA256
+			digest := sha256.Sum256(params.Message)
+			sig, err := rsa.SignPKCS1v15(rand.Reader, rsaPrivKey, crypto.SHA256, digest[:])
+			if err != nil {
+				t.Fatalf("Failed to sign: %v", err)
+			}
+			return &kms.SignOutput{
+				Signature: sig,
+			}, nil
+		})
+
+	// Create a new KMSSigner with the mocked KMS client
+	sshSigner, err := signer.NewKMSSigner(context.TODO(), kmsClient, "id-123")
+	if err != nil {
+		t.Fatalf("Failed to create KMSSigner: %v", err)
+	}
 
 	// Sign the public key with the CA signer
 	cert, err := sshSigner.Sign(ssh.UserCert, pubKey, []string{"user1"}, 24*time.Hour)
@@ -60,13 +76,13 @@ func TestSign(t *testing.T) {
 		t.Errorf("Expected certificate type %d, got %d", ssh.UserCert, cert.CertType)
 	}
 
-	// if !ssh.KeysEqual(cert.Key, pubKey) {
-	// 	t.Errorf("Expected public key %v, got %v", pubKey, cert.Key)
-	// }
+	if cert.Key.Type() != pubKey.Type() {
+		t.Errorf("Expected public key type %s, got %s", pubKey.Type(), cert.Key.Type())
+	}
 
-	// if !ssh.KeysEqual(cert.SignatureKey, caCertSigner.PublicKey()) {
-	// 	t.Errorf("Expected signature key %v, got %v", caCertSigner.PublicKey(), cert.SignatureKey)
-	// }
+	if cert.SignatureKey.Type() != sshSigner.PublicKey().Type() {
+		t.Errorf("Expected signature key type %s, got %s", sshSigner.PublicKey().Type(), cert.SignatureKey.Type())
+	}
 
 	// Allow a small delta for timing differences
 	now := uint64(time.Now().Unix())
