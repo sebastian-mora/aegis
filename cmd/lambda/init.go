@@ -31,7 +31,7 @@ type lambdaConfig struct {
 // InitOptions holds optional dependencies for initialization
 type InitOptions struct {
 	CACertSigner    signer.CertificateSigner
-	PrincipalMapper signer.PrincipalMapper
+	PrincipalMapper principals.PrincipalMapper
 	AuditStore      audit.AuditWriter
 }
 
