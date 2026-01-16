@@ -22,26 +22,55 @@ type CertificateSigner interface {
 
 // KMSSigner provides SSH certificate signing using KMS
 type KMSSigner struct {
-	sshSigner   ssh.Signer
-	caPublicKey ssh.PublicKey
+	kmsClient *kms.Client
+	keyID     string
+	publicKey ssh.PublicKey
+	sshSigner ssh.Signer
 }
 
 func NewKMSSigner(ctx context.Context, keyID string) (*KMSSigner, error) {
-	cryptoSigner, err := newKMSSignerImpl(ctx, keyID)
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	kmsClient := kms.NewFromConfig(cfg)
+
+	// Get the public key from KMS
+	pubKeyResp, err := kmsClient.GetPublicKey(ctx, &kms.GetPublicKeyInput{
+		KeyId: &keyID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get KMS public key: %w", err)
+	}
+
+	pub, err := x509.ParsePKIXPublicKey(pubKeyResp.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse public key: %w", err)
+	}
+
+	// TODO: support other key types
+	rsaPubKey, ok := pub.(*rsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("public key is not RSA")
+	}
+
+	s := &KMSSigner{
+		kmsClient: kmsClient,
+		keyID:     keyID,
+		publicKey: ssh.PublicKey(rsaPubKey),
 	}
 
 	// Convert crypto.Signer to ssh.Signer
-	sshSigner, err := ssh.NewSignerFromSigner(cryptoSigner)
+	sshSigner, err := ssh.NewSignerFromSigner(&kmsSignerAdapter{s})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SSH signer: %w", err)
 	}
 
-	return &KMSSigner{
-		sshSigner:   sshSigner,
-		caPublicKey: sshSigner.PublicKey(),
-	}, nil
+	s.sshSigner = sshSigner
+	s.caPublicKey = sshSigner.PublicKey()
+
+	return s, nil
 }
 
 func (s *KMSSigner) Sign(certType uint32, publicKey ssh.PublicKey, principals []string, expiration time.Duration) (*ssh.Certificate, error) {
@@ -73,59 +102,18 @@ func (s *KMSSigner) Sign(certType uint32, publicKey ssh.PublicKey, principals []
 	return cert, nil
 }
 
-func (s *KMSSigner) PublicKey() ssh.PublicKey {
-	return s.caPublicKey
+// kmsSignerAdapter adapts KMSSigner to implement crypto.Signer for use with ssh.NewSignerFromSigner
+type kmsSignerAdapter struct {
+	*KMSSigner
 }
 
-// kmsSignerImpl implements crypto.Signer used to sign data with a KMS key
-// this is the backbone of KMSSigner
-type kmsSignerImpl struct {
-	kmsClient *kms.Client
-	keyID     string
-	publicKey crypto.PublicKey
+func (a *kmsSignerAdapter) Public() crypto.PublicKey {
+	return a.publicKey
 }
 
-func newKMSSignerImpl(ctx context.Context, keyID string) (*kmsSignerImpl, error) {
-	cfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load AWS config: %w", err)
-	}
-
-	kmsClient := kms.NewFromConfig(cfg)
-
-	// Get the public key from KMS
-	pubKeyResp, err := kmsClient.GetPublicKey(ctx, &kms.GetPublicKeyInput{
-		KeyId: &keyID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get KMS public key: %w", err)
-	}
-
-	pub, err := x509.ParsePKIXPublicKey(pubKeyResp.PublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse public key: %w", err)
-	}
-
-	// TODO: support other key types
-	rsaPubKey, ok := pub.(*rsa.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("public key is not RSA")
-	}
-
-	return &kmsSignerImpl{
-		kmsClient: kmsClient,
-		keyID:     keyID,
-		publicKey: rsaPubKey,
-	}, nil
-}
-
-func (s *kmsSignerImpl) Public() crypto.PublicKey {
-	return s.publicKey
-}
-
-func (s *kmsSignerImpl) Sign(_ io.Reader, digest []byte, _ crypto.SignerOpts) ([]byte, error) {
-	signResp, err := s.kmsClient.Sign(context.TODO(), &kms.SignInput{
-		KeyId:            &s.keyID,
+func (a *kmsSignerAdapter) Sign(_ io.Reader, digest []byte, _ crypto.SignerOpts) ([]byte, error) {
+	signResp, err := a.kmsClient.Sign(context.TODO(), &kms.SignInput{
+		KeyId:            &a.keyID,
 		Message:          digest,
 		MessageType:      types.MessageTypeDigest,
 		SigningAlgorithm: types.SigningAlgorithmSpecRsassaPkcs1V15Sha256,
