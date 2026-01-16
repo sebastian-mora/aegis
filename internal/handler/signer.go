@@ -40,13 +40,13 @@ type Signer interface {
 
 // SignerHandler implements the Signer interface
 type SignerHandler struct {
-	signer          signerPkg.Signer
+	signer          signerPkg.CertificateSigner
 	principalMapper signerPkg.PrincipalMapper
 	auditRepo       audit.AuditWriter
 }
 
 // NewSignerHandler creates a new SignerHandler with the provided dependencies
-func NewSignerHandler(s signerPkg.Signer, pm signerPkg.PrincipalMapper, ar audit.AuditWriter) *SignerHandler {
+func NewSignerHandler(s signerPkg.CertificateSigner, pm signerPkg.PrincipalMapper, ar audit.AuditWriter) *SignerHandler {
 	return &SignerHandler{
 		signer:          s,
 		principalMapper: pm,
