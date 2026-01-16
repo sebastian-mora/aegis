@@ -30,14 +30,14 @@ type lambdaConfig struct {
 
 // InitOptions holds optional dependencies for initialization
 type InitOptions struct {
-	SSHCertificateSigner signer.SSHCertificateSigner
-	PrincipalMapper      principals.PrincipalMapper
-	AuditStore           audit.AuditWriter
+	CACertSigner    signer.CertificateSigner
+	PrincipalMapper signer.PrincipalMapper
+	AuditStore      audit.AuditWriter
 }
 
 type InitOption func(*InitOptions)
 
-func WithSSHCertificateSigner(signer signer.SSHCertificateSigner) InitOption {
+func WithCACertSigner(signer signer.CertificateSigner) InitOption {
 	return func(o *InitOptions) {
 		o.SSHCertificateSigner = signer
 	}
@@ -99,7 +99,7 @@ func loadDefaultOptions(ctx context.Context) (*InitOptions, error) {
 	kmcClient := kms.NewFromConfig(awsCfg)
 
 	// Create SSH CA Signer from KMS-backed key
-	caCertSigner, err := signer.NewSSHCertSigner(initCtx, signer.NewAWSKMSClient(kmcClient), cfg.KmsKeyId)
+	caCertSigner, err := signer.NewKMSSigner(initCtx, signer.NewAWSKMSClient(kmcClient), cfg.KmsKeyId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create KMS SSH CA Signer: %w", err)
 	}
@@ -143,7 +143,7 @@ func initialize(ctx context.Context, opts ...InitOption) (*APIGatewayHandler, er
 	}
 
 	// Create signer handler with injected dependencies
-	signerHandler := handler.NewSignerHandler(options.SSHCertificateSigner, options.PrincipalMapper, options.AuditStore)
+	signerHandler := handler.NewSignerHandler(options.CACertSigner, options.PrincipalMapper, options.AuditStore)
 
 	// Create API Gateway handler
 	apigwHandler := NewAPIGatewayHandler(signerHandler)
