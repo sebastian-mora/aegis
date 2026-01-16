@@ -19,15 +19,15 @@ type CertificateSigner interface {
 	Sign(certType uint32, publickkey ssh.PublicKey, principals []string, expiration time.Duration) (*ssh.Certificate, error)
 }
 
-// KMSSigner provides SSH certificate signing using KMS
-type KMSSigner struct {
+// SSHCertSigner provides SSH certificate signing using KMS
+type SSHCertSigner struct {
 	kmsClient AwsKMSApi
 	keyID     string
 	publicKey crypto.PublicKey
 	sshSigner ssh.Signer
 }
 
-func NewKMSSigner(ctx context.Context, kmsClient AwsKMSApi, keyID string) (*KMSSigner, error) {
+func NewSSHCertSigner(ctx context.Context, kmsClient AwsKMSApi, keyID string) (*SSHCertSigner, error) {
 
 	// Get the public key from KMS
 	pubKeyResp, err := kmsClient.GetPublicKey(ctx, &kms.GetPublicKeyInput{
@@ -48,7 +48,7 @@ func NewKMSSigner(ctx context.Context, kmsClient AwsKMSApi, keyID string) (*KMSS
 		return nil, fmt.Errorf("public key is not RSA")
 	}
 
-	s := &KMSSigner{
+	s := &SSHCertSigner{
 		kmsClient: kmsClient,
 		keyID:     keyID,
 		publicKey: rsaPubKey,
@@ -65,7 +65,7 @@ func NewKMSSigner(ctx context.Context, kmsClient AwsKMSApi, keyID string) (*KMSS
 	return s, nil
 }
 
-func (s *KMSSigner) Sign(certType uint32, publicKey ssh.PublicKey, principals []string, expiration time.Duration) (*ssh.Certificate, error) {
+func (s *SSHCertSigner) Sign(certType uint32, publicKey ssh.PublicKey, principals []string, expiration time.Duration) (*ssh.Certificate, error) {
 	now := time.Now()
 
 	cert := &ssh.Certificate{
@@ -94,7 +94,7 @@ func (s *KMSSigner) Sign(certType uint32, publicKey ssh.PublicKey, principals []
 	return cert, nil
 }
 
-func (s *KMSSigner) PublicKey() ssh.PublicKey {
+func (s *SSHCertSigner) PublicKey() ssh.PublicKey {
 	sshPubKey, err := ssh.NewPublicKey(s.publicKey)
 	if err != nil {
 		panic(fmt.Sprintf("failed to convert public key to SSH format: %v", err))
@@ -104,7 +104,7 @@ func (s *KMSSigner) PublicKey() ssh.PublicKey {
 
 // kmsSignerAdapter adapts KMSSigner to implement crypto.Signer for use with ssh.NewSignerFromSigner
 type kmsSignerAdapter struct {
-	*KMSSigner
+	*SSHCertSigner
 }
 
 func (a *kmsSignerAdapter) Public() crypto.PublicKey {
