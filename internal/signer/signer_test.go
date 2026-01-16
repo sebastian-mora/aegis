@@ -65,43 +65,13 @@ func TestSign(t *testing.T) {
 		t.Fatalf("Failed to create KMSSigner: %v", err)
 	}
 
-	// Sign the public key with the CA signer
-	cert, err := sshSigner.Sign(ssh.UserCert, pubKey, []string{"user1"}, 24*time.Hour)
-	if err != nil {
-		t.Fatalf("Failed to marshal public key: %v", err)
-	}
-
-	// Create a mock KMS client with real RSA signing
-	kmsClient := NewMockKMSClient().
-		WithGetPublicKey(func(ctx context.Context, params *kms.GetPublicKeyInput, optFns ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error) {
-			return &kms.GetPublicKeyOutput{
-				PublicKey: pubKeyDER,
-			}, nil
-		}).
-		WithSign(func(ctx context.Context, params *kms.SignInput, optFns ...func(*kms.Options)) (*kms.SignOutput, error) {
-			// Perform real RSA signing with SHA256
-			digest := sha256.Sum256(params.Message)
-			sig, err := rsa.SignPKCS1v15(rand.Reader, rsaPrivKey, crypto.SHA256, digest[:])
-			if err != nil {
-				t.Fatalf("Failed to sign: %v", err)
-			}
-			return &kms.SignOutput{
-				Signature: sig,
-			}, nil
-		})
-
-	// Create a new KMSSigner with the mocked KMS client
-	sshSigner, err := signer.NewSSHCertSigner(context.TODO(), kmsClient, "id-123")
-	if err != nil {
-		t.Fatalf("Failed to create KMSSigner: %v", err)
-	}
-
 	// Build the public key with the CA signer
 	cert, err := sshSigner.CreateSignedCertificate(ssh.UserCert, pubKey, []string{"user1"}, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("Failed to build certificate: %v", err)
 	}
 
+	//
 
 	// Check certificate fields
 	if cert.CertType != ssh.UserCert {
