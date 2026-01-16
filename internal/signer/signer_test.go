@@ -65,11 +65,13 @@ func TestSign(t *testing.T) {
 		t.Fatalf("Failed to create KMSSigner: %v", err)
 	}
 
-	// Sign the public key with the CA signer
-	cert, err := sshSigner.Sign(ssh.UserCert, pubKey, []string{"user1"}, 24*time.Hour)
+	// Build the public key with the CA signer
+	cert, err := sshSigner.CreateSignedCertificate(ssh.UserCert, pubKey, []string{"user1"}, 24*time.Hour)
 	if err != nil {
-		t.Fatalf("Failed to sign certificate: %v", err)
+		t.Fatalf("Failed to build certificate: %v", err)
 	}
+
+	//
 
 	// Check certificate fields
 	if cert.CertType != ssh.UserCert {

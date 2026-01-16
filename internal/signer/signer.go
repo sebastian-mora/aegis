@@ -15,16 +15,16 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-type CertificateSigner interface {
-	Sign(certType uint32, publickkey ssh.PublicKey, principals []string, expiration time.Duration) (*ssh.Certificate, error)
+type SSHCertificateSigner interface {
+	ssh.Signer
+	CreateSignedCertificate(certType uint32, userPubKey ssh.PublicKey, principals []string, validDuration time.Duration) (*ssh.Certificate, error)
 }
 
-// SSHCertSigner provides SSH certificate signing using KMS
+// SSHCertSigner provides SSH certificate signing using KMS and implements ssh.Signer
 type SSHCertSigner struct {
 	kmsClient AwsKMSApi
 	keyID     string
 	publicKey crypto.PublicKey
-	sshSigner ssh.Signer
 }
 
 func NewSSHCertSigner(ctx context.Context, kmsClient AwsKMSApi, keyID string) (*SSHCertSigner, error) {
@@ -54,27 +54,44 @@ func NewSSHCertSigner(ctx context.Context, kmsClient AwsKMSApi, keyID string) (*
 		publicKey: rsaPubKey,
 	}
 
-	// Convert crypto.Signer to ssh.Signer
-	sshSigner, err := ssh.NewSignerFromSigner(&kmsSignerAdapter{s})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create SSH signer: %w", err)
-	}
-
-	s.sshSigner = sshSigner
-
 	return s, nil
 }
 
-func (s *SSHCertSigner) Sign(certType uint32, publicKey ssh.PublicKey, principals []string, expiration time.Duration) (*ssh.Certificate, error) {
-	now := time.Now()
+func (s *SSHCertSigner) Sign(_ io.Reader, data []byte) (*ssh.Signature, error) {
+	signResp, err := s.kmsClient.Sign(context.TODO(), &kms.SignInput{
+		KeyId:            &s.keyID,
+		Message:          data,
+		MessageType:      types.MessageTypeDigest,
+		SigningAlgorithm: types.SigningAlgorithmSpecRsassaPkcs1V15Sha256,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign with KMS: %w", err)
+	}
 
+	return &ssh.Signature{
+		Format: "ssh-rsa",
+		Blob:   signResp.Signature,
+	}, nil
+}
+
+func (s *SSHCertSigner) PublicKey() ssh.PublicKey {
+	sshPubKey, err := ssh.NewPublicKey(s.publicKey)
+	if err != nil {
+		panic(fmt.Sprintf("failed to convert public key to SSH format: %v", err))
+	}
+	return sshPubKey
+}
+
+// CreateSignedCertificate builds and signs an SSH certificate for the given public key and principals
+// valid for the specified duration
+func (s *SSHCertSigner) CreateSignedCertificate(certType uint32, userPubKey ssh.PublicKey, principals []string, validDuration time.Duration) (*ssh.Certificate, error) {
 	cert := &ssh.Certificate{
-		Key:             publicKey,
-		KeyId:           "user-cert-" + now.Format("20060102-150405"),
+		Key:             userPubKey,
+		KeyId:           "user-cert-" + time.Now().Format("20060102-150405"),
 		CertType:        certType,
 		ValidPrincipals: principals,
-		ValidAfter:      uint64(now.Unix()),
-		ValidBefore:     uint64(now.Add(expiration).Unix()),
+		ValidAfter:      uint64(time.Now().Unix()),
+		ValidBefore:     uint64(time.Now().Add(validDuration).Unix()),
 		Permissions: ssh.Permissions{
 			Extensions: map[string]string{
 				"permit-pty":              "",
@@ -87,40 +104,13 @@ func (s *SSHCertSigner) Sign(certType uint32, publicKey ssh.PublicKey, principal
 		SignatureKey: s.PublicKey(),
 	}
 
-	if err := cert.SignCert(rand.Reader, s.sshSigner); err != nil {
+	if _, err := io.ReadFull(rand.Reader, cert.Nonce); err != nil {
+		return nil, fmt.Errorf("failed to generate nonce: %w", err)
+	}
+
+	if err := cert.SignCert(rand.Reader, s); err != nil {
 		return nil, fmt.Errorf("failed to sign certificate: %w", err)
 	}
 
 	return cert, nil
-}
-
-func (s *SSHCertSigner) PublicKey() ssh.PublicKey {
-	sshPubKey, err := ssh.NewPublicKey(s.publicKey)
-	if err != nil {
-		panic(fmt.Sprintf("failed to convert public key to SSH format: %v", err))
-	}
-	return sshPubKey
-}
-
-// kmsSignerAdapter adapts KMSSigner to implement crypto.Signer for use with ssh.NewSignerFromSigner
-type kmsSignerAdapter struct {
-	*SSHCertSigner
-}
-
-func (a *kmsSignerAdapter) Public() crypto.PublicKey {
-	return a.publicKey
-}
-
-func (a *kmsSignerAdapter) Sign(_ io.Reader, digest []byte, _ crypto.SignerOpts) ([]byte, error) {
-	signResp, err := a.kmsClient.Sign(context.TODO(), &kms.SignInput{
-		KeyId:            &a.keyID,
-		Message:          digest,
-		MessageType:      types.MessageTypeDigest,
-		SigningAlgorithm: types.SigningAlgorithmSpecRsassaPkcs1V15Sha256,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to sign with KMS: %w", err)
-	}
-
-	return signResp.Signature, nil
 }

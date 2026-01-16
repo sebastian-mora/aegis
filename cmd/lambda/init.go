@@ -30,16 +30,16 @@ type lambdaConfig struct {
 
 // InitOptions holds optional dependencies for initialization
 type InitOptions struct {
-	CACertSigner    signer.CertificateSigner
-	PrincipalMapper principals.PrincipalMapper
-	AuditStore      audit.AuditWriter
+	SSHCertificateSigner signer.SSHCertificateSigner
+	PrincipalMapper      principals.PrincipalMapper
+	AuditStore           audit.AuditWriter
 }
 
 type InitOption func(*InitOptions)
 
-func WithCACertSigner(signer signer.CertificateSigner) InitOption {
+func WithSSHCertificateSigner(signer signer.SSHCertificateSigner) InitOption {
 	return func(o *InitOptions) {
-		o.CACertSigner = signer
+		o.SSHCertificateSigner = signer
 	}
 }
 
@@ -117,9 +117,9 @@ func loadDefaultOptions(ctx context.Context) (*InitOptions, error) {
 	}
 
 	return &InitOptions{
-		CACertSigner:    caCertSigner,
-		PrincipalMapper: principalMapper,
-		AuditStore:      auditStore,
+		SSHCertificateSigner: caCertSigner,
+		PrincipalMapper:      principalMapper,
+		AuditStore:           auditStore,
 	}, nil
 }
 
@@ -143,7 +143,7 @@ func initialize(ctx context.Context, opts ...InitOption) (*APIGatewayHandler, er
 	}
 
 	// Create signer handler with injected dependencies
-	signerHandler := handler.NewSignerHandler(options.CACertSigner, options.PrincipalMapper, options.AuditStore)
+	signerHandler := handler.NewSignerHandler(options.SSHCertificateSigner, options.PrincipalMapper, options.AuditStore)
 
 	// Create API Gateway handler
 	apigwHandler := NewAPIGatewayHandler(signerHandler)

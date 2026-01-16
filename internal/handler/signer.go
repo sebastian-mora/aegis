@@ -41,13 +41,13 @@ type Signer interface {
 
 // SignerHandler implements the Signer interface
 type SignerHandler struct {
-	signer          signerPkg.CertificateSigner
+	signer          signerPkg.SSHCertificateSigner
 	principalMapper principals.PrincipalMapper
 	auditRepo       audit.AuditWriter
 }
 
 // NewSignerHandler creates a new SignerHandler with the provided dependencies
-func NewSignerHandler(s signerPkg.CertificateSigner, pm principals.PrincipalMapper, ar audit.AuditWriter) *SignerHandler {
+func NewSignerHandler(s signerPkg.SSHCertificateSigner, pm principals.PrincipalMapper, ar audit.AuditWriter) *SignerHandler {
 	return &SignerHandler{
 		signer:          s,
 		principalMapper: pm,
@@ -101,7 +101,7 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 	}
 
 	// Sign the certificate
-	userSSHCert, err := h.signer.Sign(uint32(ssh.UserCert), pubKey, principals, certificateExpiration)
+	userSSHCert, err := h.signer.CreateSignedCertificate(ssh.UserCert, pubKey, principals, certificateExpiration)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign certificate: %w", err)
 	}
