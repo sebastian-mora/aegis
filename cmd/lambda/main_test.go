@@ -59,6 +59,37 @@ func setupHandler(jsmeExpression string, t *testing.T) func(ctx context.Context,
 	mockKMS := NewMockKMSAPI(t)
 
 	// Create a real KMSSigner backed by the mock KMS API
+	sshSigner, err := signer.NewKMSSigner(context.Background(), mockKMS, "test-key-id")
+	if err != nil {
+		t.Fatalf("Failed to create KMSSigner: %v", err)
+	}
+
+func (m *MockKMSAPI) Sign(ctx context.Context, params *kms.SignInput, optFns ...func(*kms.Options)) (*kms.SignOutput, error) {
+	digest := sha256.Sum256(params.Message)
+	sig, err := rsa.SignPKCS1v15(rand.Reader, m.privateKey, crypto.SHA256, digest[:])
+	if err != nil {
+		return nil, err
+	}
+	return &kms.SignOutput{
+		Signature: sig,
+	}, nil
+}
+
+func (m *MockKMSAPI) GetPublicKey(ctx context.Context, params *kms.GetPublicKeyInput, optFns ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error) {
+	pubKeyDER, err := x509.MarshalPKIXPublicKey(&m.privateKey.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	return &kms.GetPublicKeyOutput{
+		PublicKey: pubKeyDER,
+	}, nil
+}
+
+func setupHandler(jsmeExpression string, t *testing.T) func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	// Create a mock KMS API
+	mockKMS := NewMockKMSAPI(t)
+
+	// Create a real KMSSigner backed by the mock KMS API
 	sshSigner, err := signer.NewSSHCertSigner(context.Background(), mockKMS, "test-key-id")
 	if err != nil {
 		t.Fatalf("Failed to create KMSSigner: %v", err)
