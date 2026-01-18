@@ -71,7 +71,6 @@ func TestSign(t *testing.T) {
 		t.Fatalf("Failed to build certificate: %v", err)
 	}
 
-	//
 
 	// Check certificate fields
 	if cert.CertType != ssh.UserCert {
