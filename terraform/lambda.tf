@@ -28,7 +28,7 @@ resource "aws_iam_role" "lambda_role" {
   })
 }
 
-resource "aws_iam_role_policy" "lambda_secrets_policy" {
+resource "aws_iam_role_policy" "lambda_signing_policy" {
   name = "${var.stage_name}-lambda-ssh-cert-signing-policy"
   role = aws_iam_role.lambda_role.id
 
@@ -36,30 +36,14 @@ resource "aws_iam_role_policy" "lambda_secrets_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action   = "secretsmanager:GetSecretValue"
-        Effect   = "Allow"
-        Resource = data.aws_secretsmanager_secret.user_ca_secret_id.arn
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy" "lambda_write_audit_event" {
-  name = "${var.stage_name}-lambda-ssh-cert-allow-db-write"
-  role = aws_iam_role.lambda_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = "dynamodb:PutItem"
-        Resource = aws_dynamodb_table.audit_table.arn
-      },
-      {
         Effect = "Allow"
-        Action = ["kms:GetPublicKey", "kms:Sign"]
+        Action = ["kms:Sign", "kms:GetPublicKey"]
         Resource = aws_kms_key.ssh_user_ca_key.arn
+      },
+            {
+        Effect = "Allow"
+        Action = "dynamodb:PutItem"
+        Resource = aws_dynamodb_table.audit_table.arn
       }
     ]
   })
