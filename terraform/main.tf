@@ -1,6 +1,7 @@
 terraform {
-  backend "local" {
-    
+  backend "s3" {
+    bucket = "terraform-backend-aegis"
+    key    = "dev/terraform.tfstate"
   }
 }
 

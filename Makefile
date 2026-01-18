@@ -1,13 +1,12 @@
 # Variables
-LAMBDA_ENTRY=./cmd/lambda
+LAMBDA_FUNCTIONS := sign public_key
+LAMBDA_DIR := ./cmd/lambda
 CLI_ENTRY=./cmd/cli
-LAMBDA_OUTPUT=build/bootstrap
-LAMBDA_ZIP=build/lambda.zip
 CLI_OUTPUT=build/aegis
 GOOS=linux
 GOARCH=amd64
 
-.PHONY: all build clean build-cli build-lambda zip-lambda deploy format
+.PHONY: all build clean build-cli build-lambda deploy format
 
 all: build
 
@@ -16,11 +15,14 @@ build-cli:
 	@echo "Building CLI..."
 	go build -o $(CLI_OUTPUT) $(CLI_ENTRY)
 
-## Build Lambda binary
+## Build all Lambda functions
 build-lambda:
-	@echo "Building Lambda..."
-	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=0 go build -o $(LAMBDA_OUTPUT) $(LAMBDA_ENTRY)
-	zip -j $(LAMBDA_ZIP) $(LAMBDA_OUTPUT)
+	@mkdir -p build dist
+	@for fn in $(LAMBDA_FUNCTIONS); do \
+		echo "Building Lambda function: $$fn..."; \
+		GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=0 go build -o build/bootstrap_$$fn $(LAMBDA_DIR)/$$fn; \
+		zip -j dist/lambda_$$fn.zip build/bootstrap_$$fn; \
+	done
 
 ## Build everything (CLI + Lambda)
 build: build-cli build-lambda
