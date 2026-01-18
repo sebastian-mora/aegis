@@ -61,7 +61,7 @@ func (s *SSHCertSigner) Sign(_ io.Reader, data []byte) (*ssh.Signature, error) {
 	signResp, err := s.kmsClient.Sign(context.TODO(), &kms.SignInput{
 		KeyId:            &s.keyID,
 		Message:          data,
-		MessageType:      types.MessageTypeDigest,
+		MessageType:      types.MessageTypeRaw,
 		SigningAlgorithm: types.SigningAlgorithmSpecRsassaPkcs1V15Sha256,
 	})
 	if err != nil {
