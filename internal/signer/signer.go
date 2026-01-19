@@ -104,7 +104,6 @@ func (s *SSHCertSigner) CreateSignedCertificate(certType uint32, userPubKey ssh.
 		SignatureKey: s.PublicKey(),
 	}
 
-	cert.Nonce = make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, cert.Nonce); err != nil {
 		return nil, fmt.Errorf("failed to generate nonce: %w", err)
 	}
