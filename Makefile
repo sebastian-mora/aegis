@@ -20,8 +20,9 @@ build-lambda:
 	@mkdir -p build dist
 	@for fn in $(LAMBDA_FUNCTIONS); do \
 		echo "Building Lambda function: $$fn..."; \
-		GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=0 go build -o build/bootstrap_$$fn $(LAMBDA_DIR)/$$fn; \
-		zip -j dist/lambda_$$fn.zip build/bootstrap_$$fn; \
+		GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=0 go build -o build/bootstrap $(LAMBDA_DIR)/$$fn; \
+		cp build/bootstrap build/bootstrap_$$fn; \
+		zip -j dist/lambda_$$fn.zip build/bootstrap; \
 	done
 
 ## Build everything (CLI + Lambda)

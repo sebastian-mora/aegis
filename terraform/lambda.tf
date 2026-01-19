@@ -5,18 +5,18 @@ data "aws_secretsmanager_secret" "user_ca_secret_id" {
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# Zip file for the sign Lambda function
-data "archive_file" "lambda_sign_zip" {
-  type        = "zip"
-  source_file = "${path.module}/../build/bootstrap_sign"
-  output_path = "${path.module}/../dist/lambda_sign.zip"
+# Hash the Lambda binaries for change detection
+data "local_file" "lambda_sign_binary" {
+  filename = "${path.module}/../build/bootstrap_sign"
 }
 
-# Zip file for the public key Lambda function  
-data "archive_file" "lambda_public_key_zip" {
-  type        = "zip"
-  source_file = "${path.module}/../build/bootstrap_public_key"
-  output_path = "${path.module}/../dist/lambda_public_key.zip"
+data "local_file" "lambda_public_key_binary" {
+  filename = "${path.module}/../build/bootstrap_public_key"
+}
+
+locals {
+  lambda_sign_zip_path       = "${path.module}/../dist/lambda_sign.zip"
+  lambda_public_key_zip_path = "${path.module}/../dist/lambda_public_key.zip"
 }
 
 resource "aws_iam_role" "lambda_role" {
@@ -86,9 +86,9 @@ resource "aws_lambda_function" "ssh_cert_signer" {
   function_name    = "${var.stage_name}-aegis-ssh-cert-signer"
   role             = aws_iam_role.lambda_role.arn
   package_type     = "Zip"
-  filename         = data.archive_file.lambda_sign_zip.output_path
-  source_code_hash = data.archive_file.lambda_sign_zip.output_base64sha256
-  handler          = "bootstrap_sign"
+  filename         = local.lambda_sign_zip_path
+  source_code_hash = data.local_file.lambda_sign_binary.content_base64sha256
+  handler          = "bootstrap"
   runtime          = var.lambda_runtime
   architectures    = ["x86_64"]
 
@@ -99,16 +99,15 @@ resource "aws_lambda_function" "ssh_cert_signer" {
       DYNAMO_DB_TABLE      = aws_dynamodb_table.audit_table.name
     }
   }
-  depends_on = [data.archive_file.lambda_sign_zip]
 }
 
 resource "aws_lambda_function" "get_public_key" {
   function_name    = "${var.stage_name}-aegis-ssh-cert-public-key"
   role             = aws_iam_role.lambda_public_key_role.arn
   package_type     = "Zip"
-  filename         = data.archive_file.lambda_public_key_zip.output_path
-  source_code_hash = data.archive_file.lambda_public_key_zip.output_base64sha256
-  handler          = "bootstrap_public_key"
+  filename         = local.lambda_public_key_zip_path
+  source_code_hash = data.local_file.lambda_public_key_binary.content_base64sha256
+  handler          = "bootstrap"
   runtime          = var.lambda_runtime
   architectures    = ["x86_64"]
 
@@ -117,7 +116,6 @@ resource "aws_lambda_function" "get_public_key" {
       KMS_KEY_ID = aws_kms_key.ssh_user_ca_key.key_id
     }
   }
-  depends_on = [data.archive_file.lambda_public_key_zip]
 }
 
 # Separate minimal IAM role for public key Lambda (only needs KMS GetPublicKey)
