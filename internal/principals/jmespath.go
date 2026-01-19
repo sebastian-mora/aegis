@@ -2,6 +2,7 @@ package principals
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/jmespath/go-jmespath"
 )
@@ -35,34 +36,32 @@ func (m *JMESPathPrincipalMapper) Map(claims interface{}) ([]string, error) {
 		return nil, fmt.Errorf("failed to evaluate expression: %v", err)
 	}
 
-	// If there are no matches, return an empty list
 	if result == nil {
 		return nil, fmt.Errorf("no matches found for expression")
 	}
 
-	seen := make(map[string]struct{})
-	var principals []string
-
 	switch v := result.(type) {
+
 	case string:
-		if _, exists := seen[v]; !exists {
-			seen[v] = struct{}{}
-			principals = append(principals, v)
-		}
+		return []string{v}, nil
+
 	case []interface{}:
+		var principals []string
+
+		// Attempt to convert each item to string
 		for _, item := range v {
-			s, ok := item.(string)
-			if !ok {
-				continue
-			}
-			if _, exists := seen[s]; !exists {
-				seen[s] = struct{}{}
+			if s, ok := item.(string); ok {
 				principals = append(principals, s)
+			} else {
+				return nil, fmt.Errorf("expression result contains non-string item")
 			}
 		}
+
+		// Sort and remove duplicates from principals
+		slices.Sort(principals)
+		return slices.Compact(principals), nil
+
 	default:
 		return nil, fmt.Errorf("expression result is neither a string nor a list of strings")
 	}
-
-	return principals, nil
 }

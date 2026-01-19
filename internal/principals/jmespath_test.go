@@ -52,7 +52,7 @@ func TestJMESPrincipalMapper(t *testing.T) {
 			"groups": []string{"group1", "group2"},
 		})
 		assert.NoError(t, err)
-		assert.Equal(t, expectedPrincipals, prncpls)
+		assert.ElementsMatch(t, expectedPrincipals, prncpls)
 	})
 
 	t.Run("Test with empty JMESPath expression", func(t *testing.T) {
@@ -82,4 +82,40 @@ func TestJMESPrincipalMapper(t *testing.T) {
 
 	})
 
+	t.Run("Test nil claim data", func(t *testing.T) {
+		mapper, err := principals.NewJMESPathPrincipalMapper("sub")
+		assert.NoError(t, err)
+		assert.NotNil(t, mapper)
+
+		prncpls, err := mapper.Map(nil)
+
+		assert.Error(t, err, "expected error due to nil claim data")
+		assert.Nil(t, prncpls, "no principals should be returned")
+	})
+
+	t.Run("Test with JMESPath expression that returns non-string/non-list", func(t *testing.T) {
+		mapper, err := principals.NewJMESPathPrincipalMapper("length(sub)")
+		assert.NoError(t, err)
+
+		prncpls, err := mapper.Map(map[string]interface{}{
+			"sub": "user1",
+		})
+
+		assert.Error(t, err, "expected error due to non-string/non-list result")
+		assert.Nil(t, prncpls, "no principals should be returned")
+	})
+
+	t.Run("Test deduplication", func(t *testing.T) {
+		mapper, err := principals.NewJMESPathPrincipalMapper("groups[*]")
+		assert.NoError(t, err)
+		assert.NotNil(t, mapper)
+		expectedPrincipals := []string{"group1", "group2"}
+		prncpls, err := mapper.Map(map[string]interface{}{
+			"sub":    "user1",
+			"email":  "test@test.com",
+			"groups": []string{"group1", "group2", "group1"},
+		})
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, expectedPrincipals, prncpls)
+	})
 }
