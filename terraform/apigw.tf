@@ -51,7 +51,7 @@ resource "aws_apigatewayv2_route" "sign" {
 # Public key endpoint - no authentication required
 resource "aws_apigatewayv2_route" "public_key" {
   api_id    = aws_apigatewayv2_api.api.id
-  route_key = "GET /public_key"
+  route_key = "GET /aegis.pub"
   target    = "integrations/${aws_apigatewayv2_integration.lambda_public_key.id}"
 
   authorization_type = "NONE"
