@@ -62,14 +62,14 @@ func (s *SSHCertSigner) Sign(_ io.Reader, data []byte) (*ssh.Signature, error) {
 		KeyId:            &s.keyID,
 		Message:          data,
 		MessageType:      types.MessageTypeRaw,
-		SigningAlgorithm: types.SigningAlgorithmSpecRsassaPkcs1V15Sha256,
+		SigningAlgorithm: types.SigningAlgorithmSpecRsassaPkcs1V15Sha512,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign with KMS: %w", err)
 	}
 
 	return &ssh.Signature{
-		Format: "ssh-rsa",
+		Format: string(types.SigningAlgorithmSpecRsassaPkcs1V15Sha512),
 		Blob:   signResp.Signature,
 	}, nil
 }
