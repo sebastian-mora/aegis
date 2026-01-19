@@ -69,7 +69,7 @@ func (s *SSHCertSigner) Sign(_ io.Reader, data []byte) (*ssh.Signature, error) {
 	}
 
 	return &ssh.Signature{
-		Format: string(types.SigningAlgorithmSpecRsassaPkcs1V15Sha512),
+		Format: ssh.KeyAlgoRSASHA512,
 		Blob:   signResp.Signature,
 	}, nil
 }
