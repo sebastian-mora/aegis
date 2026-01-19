@@ -1,4 +1,4 @@
-package signer_test
+package principals_test
 
 import (
 	"testing"
@@ -17,14 +17,14 @@ func TestJMESPrincipalMapper(t *testing.T) {
 		assert.NotNil(t, mapper)
 
 		expectedPrincipals := []string{"user1"}
-		principals, err := mapper.Map(map[string]interface{}{
+		prncpls, err := mapper.Map(map[string]interface{}{
 			"sub":    "user1",
 			"email":  "test@test.com",
 			"groups": []string{"group1", "group2"},
 		})
 
 		assert.NoError(t, err)
-		assert.Equal(t, expectedPrincipals, principals)
+		assert.Equal(t, expectedPrincipals, prncpls)
 	})
 
 	t.Run("Test with expression that returns multiple principals", func(t *testing.T) {
@@ -32,13 +32,13 @@ func TestJMESPrincipalMapper(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, mapper)
 		expectedPrincipals := []string{"group1", "group2"}
-		principals, err := mapper.Map(map[string]interface{}{
+		prncpls, err := mapper.Map(map[string]interface{}{
 			"sub":    "user1",
 			"email":  "test@test.com",
 			"groups": []string{"group1", "group2"},
 		})
 		assert.NoError(t, err)
-		assert.Equal(t, expectedPrincipals, principals)
+		assert.Equal(t, expectedPrincipals, prncpls)
 	})
 
 	t.Run("Test with expression concats muiti single attrs", func(t *testing.T) {
@@ -46,13 +46,13 @@ func TestJMESPrincipalMapper(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, mapper)
 		expectedPrincipals := []string{"user1", "test@test.com"}
-		principals, err := mapper.Map(map[string]interface{}{
+		prncpls, err := mapper.Map(map[string]interface{}{
 			"sub":    "user1",
 			"email":  "test@test.com",
 			"groups": []string{"group1", "group2"},
 		})
 		assert.NoError(t, err)
-		assert.Equal(t, expectedPrincipals, principals)
+		assert.Equal(t, expectedPrincipals, prncpls)
 	})
 
 	t.Run("Test with empty JMESPath expression", func(t *testing.T) {
@@ -66,12 +66,12 @@ func TestJMESPrincipalMapper(t *testing.T) {
 		mapper, err := principals.NewJMESPathPrincipalMapper("no_match")
 		assert.NoError(t, err)
 
-		principals, err := mapper.Map(map[string]interface{}{
+		prncpls, err := mapper.Map(map[string]interface{}{
 			"sub": "user1",
 		})
 
 		assert.Error(t, err, "expected error due to no match")
-		assert.Nil(t, principals, "no principals should be returned")
+		assert.Nil(t, prncpls, "no principals should be returned")
 	})
 
 	t.Run("Test invalid JMESPath expression syntax", func(t *testing.T) {

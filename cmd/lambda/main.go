@@ -9,6 +9,7 @@ import (
 )
 
 func main() {
+
 	// Initialize all dependencies
 	handler, err := initialize(context.Background())
 	if err != nil {

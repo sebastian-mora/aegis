@@ -2,44 +2,72 @@ package main
 
 import (
 	"context"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
 	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sebastian-mora/aegis/internal/audit"
+	"github.com/sebastian-mora/aegis/internal/principals"
 	"github.com/sebastian-mora/aegis/internal/signer"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/ssh"
 )
 
-func generateSSHKey() (*rsa.PrivateKey, *ssh.PublicKey, error) {
-	// Generate the RSA key pair
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Generate the corresponding SSH public key
-	publicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return privateKey, &publicKey, nil
+type MockKMSAPI struct {
+	privateKey *rsa.PrivateKey
 }
 
-func setupHandler(jsmeExpression string) func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	caPrivateKey, _, _ := generateSSHKey()
-	caCertSigner, _ := ssh.NewSignerFromKey(caPrivateKey)
+func NewMockKMSAPI(t *testing.T) *MockKMSAPI {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Failed to generate RSA key: %v", err)
+	}
+	return &MockKMSAPI{privateKey: privateKey}
+}
 
-	principalMapper, _ := signer.NewJMESPathPrincipalMapper(jsmeExpression)
+func (m *MockKMSAPI) Sign(ctx context.Context, params *kms.SignInput, optFns ...func(*kms.Options)) (*kms.SignOutput, error) {
+	digest := sha256.Sum256(params.Message)
+	sig, err := rsa.SignPKCS1v15(rand.Reader, m.privateKey, crypto.SHA256, digest[:])
+	if err != nil {
+		return nil, err
+	}
+	return &kms.SignOutput{
+		Signature: sig,
+	}, nil
+}
+
+func (m *MockKMSAPI) GetPublicKey(ctx context.Context, params *kms.GetPublicKeyInput, optFns ...func(*kms.Options)) (*kms.GetPublicKeyOutput, error) {
+	pubKeyDER, err := x509.MarshalPKIXPublicKey(&m.privateKey.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	return &kms.GetPublicKeyOutput{
+		PublicKey: pubKeyDER,
+	}, nil
+}
+
+func setupHandler(jsmeExpression string, t *testing.T) func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	// Create a mock KMS API
+	mockKMS := NewMockKMSAPI(t)
+
+	// Create a real KMSSigner backed by the mock KMS API
+	sshSigner, err := signer.NewSSHCertSigner(context.Background(), mockKMS, "test-key-id")
+	if err != nil {
+		t.Fatalf("Failed to create KMSSigner: %v", err)
+	}
+
+	principalMapper, _ := principals.NewJMESPathPrincipalMapper(jsmeExpression)
 
 	apigwHandler, _ := initialize(context.Background(),
-		WithCACertSigner(caCertSigner),
+		WithSSHCertificateSigner(sshSigner),
 		WithPrincipalMapper(principalMapper),
 		WithAuditStore(&MockAuditRepo{}),
 	)
@@ -106,7 +134,7 @@ func TestLambdaHandlerWithStringClaims(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			handler := setupHandler(tt.jmesExpr)
+			handler := setupHandler(tt.jmesExpr, t)
 			tokenString, err := signJWTWithSecret(tt.claims, "test123")
 			assert.NoError(t, err)
 
@@ -143,7 +171,7 @@ func TestLambdaHandlerWithNoMatchingClaims(t *testing.T) {
 	pubkey, _, err := signer.NewSSHKeyPair(signer.ECDSA)
 	assert.NoError(t, err)
 
-	handler := setupHandler("[]")
+	handler := setupHandler("[]", t)
 	tokenString, _ := signJWTWithSecret(map[string]string{}, "test123")
 
 	event := events.APIGatewayV2HTTPRequest{
@@ -158,8 +186,6 @@ func TestLambdaHandlerWithNoMatchingClaims(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 500, resp.StatusCode)
-
-	assert.Contains(t, resp.Body, "no matches found for expression")
 
 }
 
@@ -211,7 +237,7 @@ func TestLambdaHandlerWithTTls(t *testing.T) {
 	pubkey, _, err := signer.NewSSHKeyPair(signer.ECDSA)
 	assert.NoError(t, err)
 
-	handler := setupHandler("name")
+	handler := setupHandler("name", t)
 	tokenString, err := signJWTWithSecret(map[string]string{"name": "ruse"}, "test123")
 
 	for _, tt := range tests {

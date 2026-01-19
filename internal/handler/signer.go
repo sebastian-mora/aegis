@@ -10,6 +10,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sebastian-mora/aegis/internal/audit"
 	"github.com/sebastian-mora/aegis/internal/logger"
+	"github.com/sebastian-mora/aegis/internal/principals"
 	signerPkg "github.com/sebastian-mora/aegis/internal/signer"
 	"golang.org/x/crypto/ssh"
 )
@@ -40,13 +41,13 @@ type Signer interface {
 
 // SignerHandler implements the Signer interface
 type SignerHandler struct {
-	signer          signerPkg.Signer
-	principalMapper signerPkg.PrincipalMapper
+	signer          signerPkg.SSHCertificateSigner
+	principalMapper principals.PrincipalMapper
 	auditRepo       audit.AuditWriter
 }
 
 // NewSignerHandler creates a new SignerHandler with the provided dependencies
-func NewSignerHandler(s signerPkg.Signer, pm signerPkg.PrincipalMapper, ar audit.AuditWriter) *SignerHandler {
+func NewSignerHandler(s signerPkg.SSHCertificateSigner, pm principals.PrincipalMapper, ar audit.AuditWriter) *SignerHandler {
 	return &SignerHandler{
 		signer:          s,
 		principalMapper: pm,
@@ -100,7 +101,7 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 	}
 
 	// Sign the certificate
-	userSSHCert, err := h.signer.Sign(uint32(ssh.UserCert), pubKey, principals, certificateExpiration)
+	userSSHCert, err := h.signer.CreateSignedCertificate(ssh.UserCert, pubKey, principals, certificateExpiration)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign certificate: %w", err)
 	}

@@ -1,55 +1,116 @@
 package signer
 
 import (
+	"context"
+	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"fmt"
+	"io"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"golang.org/x/crypto/ssh"
 )
 
-type Signer interface {
-	Sign(certType uint32, publickkey ssh.PublicKey, principals []string, expiration time.Duration) (*ssh.Certificate, error)
+type SSHCertificateSigner interface {
+	ssh.Signer
+	CreateSignedCertificate(certType uint32, userPubKey ssh.PublicKey, principals []string, validDuration time.Duration) (*ssh.Certificate, error)
 }
 
-type SSHCASigner struct {
-	Signer ssh.Signer
+// SSHCertSigner provides SSH certificate signing using KMS and implements ssh.Signer
+type SSHCertSigner struct {
+	kmsClient AwsKMSApi
+	keyID     string
+	publicKey crypto.PublicKey
 }
 
-func NewSSHCASigner(signer ssh.Signer) *SSHCASigner {
-	return &SSHCASigner{Signer: signer}
-}
+func NewSSHCertSigner(ctx context.Context, kmsClient AwsKMSApi, keyID string) (*SSHCertSigner, error) {
 
-func (s *SSHCASigner) Sign(certType uint32, publicKey ssh.PublicKey, principals []string, expiration time.Duration) (*ssh.Certificate, error) {
-	now := time.Now()
-
-	var cert *ssh.Certificate
-	switch certType {
-	case ssh.UserCert:
-		cert = &ssh.Certificate{
-			Key:             publicKey,
-			KeyId:           "user-cert-" + now.Format("20060102-150405"),
-			CertType:        ssh.UserCert,
-			ValidPrincipals: principals,
-			ValidAfter:      uint64(now.Unix()),
-			ValidBefore:     uint64(now.Add(expiration).Unix()),
-			Permissions: ssh.Permissions{
-				Extensions: map[string]string{
-					"permit-pty":              "",
-					"permit-port-forwarding":  "",
-					"permit-agent-forwarding": "",
-					"permit-X11-forwarding":   "",
-					"permit-user-rc":          "",
-				},
-			},
-		}
-
-	default:
-		return nil, fmt.Errorf("unsupported certificate type: %d", certType)
+	// Get the public key from KMS
+	pubKeyResp, err := kmsClient.GetPublicKey(ctx, &kms.GetPublicKeyInput{
+		KeyId: &keyID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get KMS public key: %w", err)
 	}
 
-	if err := cert.SignCert(rand.Reader, s.Signer); err != nil {
-		return nil, err
+	pub, err := x509.ParsePKIXPublicKey(pubKeyResp.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse public key: %w", err)
+	}
+
+	// TODO: support other key types
+	rsaPubKey, ok := pub.(*rsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("public key is not RSA")
+	}
+
+	s := &SSHCertSigner{
+		kmsClient: kmsClient,
+		keyID:     keyID,
+		publicKey: rsaPubKey,
+	}
+
+	return s, nil
+}
+
+func (s *SSHCertSigner) Sign(_ io.Reader, data []byte) (*ssh.Signature, error) {
+	signResp, err := s.kmsClient.Sign(context.TODO(), &kms.SignInput{
+		KeyId:            &s.keyID,
+		Message:          data,
+		MessageType:      types.MessageTypeRaw,
+		SigningAlgorithm: types.SigningAlgorithmSpecRsassaPkcs1V15Sha512,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign with KMS: %w", err)
+	}
+
+	return &ssh.Signature{
+		Format: ssh.KeyAlgoRSASHA512,
+		Blob:   signResp.Signature,
+	}, nil
+}
+
+func (s *SSHCertSigner) PublicKey() ssh.PublicKey {
+	sshPubKey, err := ssh.NewPublicKey(s.publicKey)
+	if err != nil {
+		panic(fmt.Sprintf("failed to convert public key to SSH format: %v", err))
+	}
+	return sshPubKey
+}
+
+// CreateSignedCertificate builds and signs an SSH certificate for the given public key and principals
+// valid for the specified duration
+func (s *SSHCertSigner) CreateSignedCertificate(certType uint32, userPubKey ssh.PublicKey, principals []string, validDuration time.Duration) (*ssh.Certificate, error) {
+	cert := &ssh.Certificate{
+		Key:             userPubKey,
+		KeyId:           "user-cert-" + time.Now().Format("20060102-150405"),
+		CertType:        certType,
+		ValidPrincipals: principals,
+		ValidAfter:      uint64(time.Now().Unix()),
+		ValidBefore:     uint64(time.Now().Add(validDuration).Unix()),
+		Permissions: ssh.Permissions{
+			Extensions: map[string]string{
+				"permit-pty":              "",
+				"permit-port-forwarding":  "",
+				"permit-agent-forwarding": "",
+				"permit-X11-forwarding":   "",
+				"permit-user-rc":          "",
+			},
+		},
+		SignatureKey: s.PublicKey(),
+	}
+
+	cert.Nonce = make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, cert.Nonce); err != nil {
+		return nil, fmt.Errorf("failed to generate nonce: %w", err)
+	}
+
+	if err := cert.SignCert(rand.Reader, s); err != nil {
+		return nil, fmt.Errorf("failed to sign certificate: %w", err)
 	}
 
 	return cert, nil

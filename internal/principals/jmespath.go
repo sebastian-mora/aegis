@@ -1,14 +1,10 @@
-package signer
+package principals
 
 import (
 	"fmt"
 
 	"github.com/jmespath/go-jmespath"
 )
-
-type PrincipalMapper interface {
-	Map(claims interface{}) ([]string, error)
-}
 
 type JMESPathPrincipalMapper struct {
 	Exp *jmespath.JMESPath
