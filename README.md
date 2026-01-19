@@ -60,4 +60,47 @@ Alternatively, you can pass the values directly via the command line:
   -ttl 1h
 ```
 
+---
+
+## API Endpoints
+
+Aegis exposes two API endpoints via AWS API Gateway. While the **CLI client is the recommended way to sign certificates** (it handles OIDC authentication and key management automatically), understanding the API is useful for custom integrations or debugging.
+
+### Get CA Public Key
+
+Retrieves the Certificate Authority's public key. This is useful for configuring SSH servers to trust certificates signed by Aegis.
+
+```bash
+curl https://<your-api-gateway-url>/aegis.pub
+```
+
+Add the returned public key to your SSH server's `TrustedUserCAKeys` file:
+```bash
+curl https://<your-api-gateway-url>/aegis.pub >> /etc/ssh/trusted_user_ca_keys
+echo "TrustedUserCAKeys /etc/ssh/trusted_user_ca_keys" >> /etc/ssh/sshd_config
+systemctl restart sshd
+```
+
+### Sign User Public Key
+
+Signs a user's SSH public key and returns a certificate. Requires a valid OIDC token.
+
+```bash
+curl -X POST https://<your-api-gateway-url>/sign_user_key \
+  -H "Authorization: Bearer <your-oidc-token>" \
+  -d "$(cat ~/.ssh/id_ed25519.pub)" \
+  --url-query "ttl=60"
+```
+
+Save the certificate for SSH authentication:
+```bash
+curl -X POST https://<your-api-gateway-url>/sign_user_key \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "$(cat ~/.ssh/id_ed25519.pub)" \
+  > ~/.ssh/id_ed25519-cert.pub
+
+# SSH will automatically use the certificate if it matches your key
+ssh user@server
+```
+
 
