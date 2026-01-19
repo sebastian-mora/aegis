@@ -48,7 +48,7 @@ func loadConfig(file string) ClientConfig {
 		AuthDomain:           getEnv("AUTH_DOMAIN", ""),
 		ClientID:             getEnv("CLIENT_ID", ""),
 		AegisEndpoint:        getEnv("AEGIS_ENDPOINT", ""),
-		Scope:                getEnv("SCOPE", "openid email profile sign:user_key"),
+		Scope:                getEnv("SCOPE", "openid email profile offline_access"),
 		KeyOutputPath:        getEnv("KEY_OUTPUT_PATH", filepath.Join(os.Getenv("HOME"), ".ssh")),
 		TTL:                  defaultTTL,
 		AuthenticationMethod: getAuthenticationMethod(),
