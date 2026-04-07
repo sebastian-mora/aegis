@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -57,8 +58,18 @@ func ParseAccessToken(idToken string) (*IdTokenClaims, error) {
 	return &claims, nil
 }
 
+// CachedToken only stores the refresh token on disk (not access/id tokens)
+type CachedToken struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 func SaveToken(path string, token *oauth2.Token) error {
-	data, err := json.Marshal(token)
+	// Only persist the refresh token - access tokens stay in memory only
+	cached := CachedToken{
+		RefreshToken: token.RefreshToken,
+	}
+
+	data, err := json.Marshal(cached)
 	if err != nil {
 		return err
 	}
@@ -66,7 +77,7 @@ func SaveToken(path string, token *oauth2.Token) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-func LoadToken(path string) (*oauth2.Token, error) {
+func LoadToken(path string) (*CachedToken, error) {
 	data, err := os.ReadFile(path)
 
 	if err != nil {
@@ -82,10 +93,30 @@ func LoadToken(path string) (*oauth2.Token, error) {
 		return nil, nil
 	}
 
-	var token oauth2.Token
-	if err := json.Unmarshal(data, &token); err != nil {
+	var cached CachedToken
+	if err := json.Unmarshal(data, &cached); err != nil {
 		return nil, fmt.Errorf("invalid token cache: %w", err)
 	}
 
-	return &token, nil
+	return &cached, nil
+}
+
+// RefreshAccessToken exchanges a refresh token for a fresh access token
+func RefreshAccessToken(cfg ClientConfig, refreshToken string) (*oauth2.Token, error) {
+	oauthCfg := &oauth2.Config{
+		ClientID: cfg.ClientID,
+		Endpoint: oauth2.Endpoint{
+			TokenURL: cfg.AuthDomain + "/application/o/token/",
+		},
+		Scopes: []string{cfg.Scope},
+	}
+
+	// Create an expired token with only refresh token set
+	// oauth2 library will automatically refresh it
+	expiredToken := &oauth2.Token{
+		RefreshToken: refreshToken,
+	}
+
+	tokenSource := oauthCfg.TokenSource(context.Background(), expiredToken)
+	return tokenSource.Token()
 }

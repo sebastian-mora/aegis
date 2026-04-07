@@ -10,6 +10,7 @@ import (
 
 	"github.com/sebastian-mora/aegis/client"
 	"github.com/sebastian-mora/aegis/internal/signer"
+	"golang.org/x/oauth2"
 )
 
 var (
@@ -95,19 +96,32 @@ func run(cfg ClientConfig) error {
 	fmt.Println()
 
 	tokenPath := filepath.Join(filepath.Dir(configPathFlag), "token.json")
-	token, err := LoadToken(tokenPath)
+	cached, err := LoadToken(tokenPath)
 	auth := getAuthenticator(cfg)
 
-	if err != nil || token == nil || token.Expiry.Before(time.Now()) {
+	var token *oauth2.Token
+
+	// Try to refresh using cached refresh token
+	if err == nil && cached != nil && cached.RefreshToken != "" {
+		token, err = RefreshAccessToken(cfg, cached.RefreshToken)
+		if err != nil {
+			// Refresh failed (token revoked/expired), need full re-auth
+			fmt.Println("Session expired, re-authenticating...")
+			token = nil
+		}
+	}
+
+	// If no valid token, do full authentication
+	if token == nil {
 		token, err = auth.Authenticate(cfg)
 		if err != nil {
 			return fmt.Errorf("authentication failed: %w", err)
 		}
+	}
 
-		// Save the token for future use
-		if err := SaveToken(tokenPath, token); err != nil {
-			return fmt.Errorf("failed to save token: %w", err)
-		}
+	// Save refresh token (may have rotated)
+	if err := SaveToken(tokenPath, token); err != nil {
+		return fmt.Errorf("failed to save token: %w", err)
 	}
 
 	claims, _ := ParseAccessToken(token.AccessToken)
