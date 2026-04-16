@@ -44,11 +44,6 @@ resource "aws_iam_role_policy" "lambda_signing_policy" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["kms:Sign", "kms:GetPublicKey"]
-        Resource = aws_kms_key.ssh_user_ca_key.arn
-      },
-      {
-        Effect   = "Allow"
         Action   = "dynamodb:PutItem"
         Resource = aws_dynamodb_table.audit_table.arn
       },
