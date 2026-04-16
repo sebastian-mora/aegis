@@ -93,12 +93,6 @@ resource "aws_cloudwatch_log_group" "apigw_access_logs" {
   name = "/aws/apigateway/${local.name}-access-logs"
 }
 
-
-// Create API Gateway Account for logging
-resource "aws_api_gateway_account" "apgw_account" {
-  cloudwatch_role_arn = aws_iam_role.cloudwatch.arn
-}
-
 data "aws_iam_policy_document" "assume_role" {
   statement {
     effect = "Allow"
@@ -131,7 +125,7 @@ data "aws_iam_policy_document" "cloudwatch" {
       "logs:FilterLogEvents",
     ]
 
-    resources = ["*"]
+    resources = [aws_cloudwatch_log_group.apigw_access_logs.arn, "${aws_cloudwatch_log_group.apigw_access_logs.arn}:*"]
   }
 }
 resource "aws_iam_role_policy" "cloudwatch" {
