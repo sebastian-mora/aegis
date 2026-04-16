@@ -125,7 +125,7 @@ data "aws_iam_policy_document" "cloudwatch" {
       "logs:FilterLogEvents",
     ]
 
-    resources = ["*"]
+    resources = [aws_cloudwatch_log_group.apigw_access_logs.arn, "${aws_cloudwatch_log_group.apigw_access_logs.arn}:*"]
   }
 }
 resource "aws_iam_role_policy" "cloudwatch" {
