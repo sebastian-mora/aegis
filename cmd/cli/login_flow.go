@@ -40,7 +40,7 @@ func (a *PKCEAuthenticator) Authenticate(cfg ClientConfig) (*oauth2.Token, error
 	authURL := buildAuthURL(oauthCfg, state, codeChallenge)
 
 	fmt.Println("To authenticate, visit this URL:")
-	fmt.Printf("  %s\n", authURL)
+	fmt.Printf("  %s\n", paintURL(authURL))
 	fmt.Println()
 	fmt.Println("Waiting for callback...")
 	fmt.Println()
@@ -160,7 +160,7 @@ func (a *DeviceCodeAuthenticator) Authenticate(cfg ClientConfig) (*oauth2.Token,
 		return nil, err
 	}
 
-	fmt.Printf("To authenticate, visit: %s\n", response.VerificationURIComplete)
+	fmt.Printf("To authenticate, visit: %s\n", paintURL(response.VerificationURIComplete))
 
 	// Poll for the token
 	token, err := oauthCfg.DeviceAccessToken(ctx, response)

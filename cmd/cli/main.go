@@ -72,7 +72,7 @@ func loadClientConfig() (ClientConfig, error) {
 }
 
 func fatalf(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "\n[ERROR] ")
+	fmt.Fprintf(os.Stderr, "\n%s ", paint("[ERROR]", ansiRed))
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	fmt.Fprintf(os.Stderr, "\n")
 	os.Exit(1)
@@ -91,7 +91,7 @@ func getAuthenticator(cfg ClientConfig) Authenticator {
 
 func run(cfg ClientConfig) error {
 	fmt.Println(strings.Repeat("=", 60))
-	fmt.Println("Aegis SSH Certificate Signer")
+	fmt.Println(paintBold("Aegis SSH Certificate Signer"))
 	fmt.Println(strings.Repeat("=", 60))
 	fmt.Println()
 
@@ -106,7 +106,7 @@ func run(cfg ClientConfig) error {
 		token, err = RefreshAccessToken(cfg, cached.RefreshToken)
 		if err != nil {
 			// Refresh failed (token revoked/expired), need full re-auth
-			fmt.Println("Session expired, re-authenticating...")
+			fmt.Println(paint("Session expired, re-authenticating...", ansiYellow))
 			token = nil
 		}
 	}
@@ -125,7 +125,7 @@ func run(cfg ClientConfig) error {
 	}
 
 	claims, _ := ParseAccessToken(token.AccessToken)
-	fmt.Printf("User authenticated: %s\n", claims.Name)
+	fmt.Printf("%s %s\n", paint("User authenticated:", ansiGreen), paintBold(claims.Name))
 	fmt.Println()
 
 	fmt.Println("Generating Ed25519 key pair...")
@@ -154,7 +154,7 @@ func run(cfg ClientConfig) error {
 	fmt.Printf("  %s/aegis-cert.pub\n", cfg.KeyOutputPath)
 	fmt.Println()
 	fmt.Println(strings.Repeat("=", 60))
-	fmt.Println("Done! You can now use your SSH certificate to authenticate.")
+	fmt.Println(paintBold(paint("Done! You can now use your SSH certificate to authenticate.", ansiGreen)))
 	fmt.Println(strings.Repeat("=", 60))
 
 	return nil
