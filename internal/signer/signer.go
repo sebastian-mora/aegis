@@ -18,8 +18,6 @@ import (
 type SSHCertificateSigner interface {
 	ssh.Signer
 	CreateSignedCertificate(certType uint32, userPubKey ssh.PublicKey, principals []string, validDuration time.Duration) (*ssh.Certificate, error)
-	// KeyID returns the identifier of the CA key backing this signer
-	KeyID() string
 }
 
 // SSHCertSigner provides SSH certificate signing using KMS and implements ssh.Signer
@@ -74,11 +72,6 @@ func (s *SSHCertSigner) Sign(_ io.Reader, data []byte) (*ssh.Signature, error) {
 		Format: ssh.KeyAlgoRSASHA512,
 		Blob:   signResp.Signature,
 	}, nil
-}
-
-// KeyID returns the KMS key ID of the CA key used to sign certificates
-func (s *SSHCertSigner) KeyID() string {
-	return s.keyID
 }
 
 func (s *SSHCertSigner) PublicKey() ssh.PublicKey {

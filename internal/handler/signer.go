@@ -68,7 +68,8 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 	// Extract required claims
 	aud, audOk := parsedTokenClaims["aud"].(string)
 	sub, subOk := parsedTokenClaims["sub"].(string)
-	if !audOk || !subOk {
+	iss, issOk := parsedTokenClaims["iss"].(string)
+	if !audOk || !subOk || !issOk {
 		return nil, fmt.Errorf("%w: missing required claims", ErrUnauthorized)
 	}
 
@@ -118,12 +119,13 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 		PublicKeyFingerprint:   ssh.FingerprintSHA256(pubKey),
 		CertificateKeyId:       userSSHCert.KeyId,
 		CertificateFingerprint: ssh.FingerprintSHA256(userSSHCert),
-		CAKeyId:                h.signer.KeyID(),
+		CAPublicKeyFingerprint: ssh.FingerprintSHA256(userSSHCert.SignatureKey),
 		Principals:             principals,
 		SourceIp:               req.SourceIP,
 		UserAgent:              req.UserAgent,
 		Sub:                    sub,
 		Aud:                    aud,
+		Iss:                    iss,
 		ExpiresAt:              expiresAt,
 	}
 
