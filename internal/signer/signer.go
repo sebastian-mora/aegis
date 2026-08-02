@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"time"
@@ -17,7 +18,19 @@ import (
 
 type SSHCertificateSigner interface {
 	ssh.Signer
-	CreateSignedCertificate(certType uint32, userPubKey ssh.PublicKey, principals []string, validDuration time.Duration) (*ssh.Certificate, error)
+	CreateSignedCertificate(certType uint32, keyID string, userPubKey ssh.PublicKey, principals []string, validDuration time.Duration) (*ssh.Certificate, error)
+}
+
+// NewCertificateKeyID builds a key ID identifying a single certificate issuance.
+// sshd logs this value on login, so it carries the subject to make the login
+// attributable, plus random bytes so two certificates issued in the same second
+// never collide.
+func NewCertificateKeyID(subject string) (string, error) {
+	suffix := make([]byte, 8)
+	if _, err := io.ReadFull(rand.Reader, suffix); err != nil {
+		return "", fmt.Errorf("failed to generate key id: %w", err)
+	}
+	return fmt.Sprintf("%s-%s-%s", subject, time.Now().UTC().Format("20060102T150405Z"), hex.EncodeToString(suffix)), nil
 }
 
 // SSHCertSigner provides SSH certificate signing using KMS and implements ssh.Signer
@@ -83,11 +96,16 @@ func (s *SSHCertSigner) PublicKey() ssh.PublicKey {
 }
 
 // CreateSignedCertificate builds and signs an SSH certificate for the given public key and principals
-// valid for the specified duration
-func (s *SSHCertSigner) CreateSignedCertificate(certType uint32, userPubKey ssh.PublicKey, principals []string, validDuration time.Duration) (*ssh.Certificate, error) {
+// valid for the specified duration. keyID identifies this issuance and is logged by sshd on login;
+// use NewCertificateKeyID to build one.
+func (s *SSHCertSigner) CreateSignedCertificate(certType uint32, keyID string, userPubKey ssh.PublicKey, principals []string, validDuration time.Duration) (*ssh.Certificate, error) {
+	if keyID == "" {
+		return nil, fmt.Errorf("key id must not be empty")
+	}
+
 	cert := &ssh.Certificate{
 		Key:             userPubKey,
-		KeyId:           "user-cert-" + time.Now().Format("20060102-150405"),
+		KeyId:           keyID,
 		CertType:        certType,
 		ValidPrincipals: principals,
 		ValidAfter:      uint64(time.Now().Unix()),

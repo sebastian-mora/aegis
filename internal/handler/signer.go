@@ -102,7 +102,13 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 	}
 
 	// Sign the certificate
-	userSSHCert, err := h.signer.CreateSignedCertificate(ssh.UserCert, pubKey, principals, certificateExpiration)
+	keyID, err := signerPkg.NewCertificateKeyID(sub)
+	if err != nil {
+		logger.Error(ctx, "failed to generate certificate key id", "error", err)
+		return nil, fmt.Errorf("%w: %v", ErrInternalServer, err)
+	}
+
+	userSSHCert, err := h.signer.CreateSignedCertificate(ssh.UserCert, keyID, pubKey, principals, certificateExpiration)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign certificate: %w", err)
 	}
@@ -118,7 +124,6 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 		PublicKey:              string(ssh.MarshalAuthorizedKey(pubKey)),
 		PublicKeyFingerprint:   ssh.FingerprintSHA256(pubKey),
 		CertificateKeyId:       userSSHCert.KeyId,
-		CertificateFingerprint: ssh.FingerprintSHA256(userSSHCert),
 		CAPublicKeyFingerprint: ssh.FingerprintSHA256(userSSHCert.SignatureKey),
 		Principals:             principals,
 		SourceIp:               req.SourceIP,
