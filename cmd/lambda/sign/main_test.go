@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/sebastian-mora/aegis/internal/principals"
 	"github.com/sebastian-mora/aegis/internal/signer"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -54,7 +56,7 @@ func (m *MockKMSAPI) GetPublicKey(ctx context.Context, params *kms.GetPublicKeyI
 	}, nil
 }
 
-func setupHandler(jsmeExpression string, t *testing.T) func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+func setupHandlerWithAudit(jsmeExpression string, t *testing.T) (func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error), *MockAuditRepo) {
 	// Create a mock KMS API
 	mockKMS := NewMockKMSAPI(t)
 
@@ -66,25 +68,37 @@ func setupHandler(jsmeExpression string, t *testing.T) func(ctx context.Context,
 
 	principalMapper, _ := principals.NewJMESPathPrincipalMapper(jsmeExpression)
 
+	auditRepo := &MockAuditRepo{}
 	apigwHandler, _ := initialize(context.Background(),
 		WithSSHCertificateSigner(sshSigner),
 		WithPrincipalMapper(principalMapper),
-		WithAuditStore(&MockAuditRepo{}),
+		WithAuditStore(auditRepo),
 	)
 
-	return apigwHandler.Handle
+	return apigwHandler.Handle, auditRepo
 }
 
-type MockAuditRepo struct{}
+func setupHandler(jsmeExpression string, t *testing.T) func(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	handler, _ := setupHandlerWithAudit(jsmeExpression, t)
+	return handler
+}
+
+type MockAuditRepo struct {
+	Events []audit.KeySignEvent
+}
 
 func (a *MockAuditRepo) Write(event audit.KeySignEvent) error {
+	a.Events = append(a.Events, event)
 	return nil
 }
 
 func signJWTWithSecret(claims map[string]string, secret string) (string, error) {
+	// Defaults for the claims the handler requires on every request; individual
+	// tests override them by passing the same key in claims.
 	mapClaims := jwt.MapClaims{
 		"aud": "test-aud",
 		"sub": "test-sub",
+		"iss": "https://idp.example.com",
 	}
 	for k, v := range claims {
 		var parsed interface{}
@@ -160,10 +174,55 @@ func TestLambdaHandlerWithStringClaims(t *testing.T) {
 			assert.NoError(t, err)
 
 			sshCert, ok := parsedKey.(*ssh.Certificate)
-			assert.True(t, ok)
+			require.True(t, ok, "expected response body to be a certificate, got %q", resp.Body)
 			assert.ElementsMatch(t, tt.expectedPrin, sshCert.ValidPrincipals)
 		})
 	}
+}
+
+func TestAuditEventIdentityAndFingerprints(t *testing.T) {
+	pubkey, _, err := signer.NewSSHKeyPair(signer.ECDSA)
+	assert.NoError(t, err)
+
+	handler, auditRepo := setupHandlerWithAudit("email", t)
+	tokenString, err := signJWTWithSecret(map[string]string{
+		"email": "alice@example.com",
+		"iss":   "https://idp.example.com",
+	}, "test123")
+	assert.NoError(t, err)
+
+	event := events.APIGatewayV2HTTPRequest{
+		Headers: map[string]string{"authorization": "Bearer " + tokenString},
+		RawPath: "/sign_user_key",
+		Body:    pubkey,
+	}
+
+	resp, err := handler(context.Background(), event)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+
+	assert.Len(t, auditRepo.Events, 1)
+	auditEvent := auditRepo.Events[0]
+
+	assert.Equal(t, "https://idp.example.com", auditEvent.Iss)
+	assert.Equal(t, "test-sub", auditEvent.Sub)
+
+	parsedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(resp.Body))
+	assert.NoError(t, err)
+	cert, ok := parsedKey.(*ssh.Certificate)
+	require.True(t, ok, "expected response body to be a certificate, got %q", resp.Body)
+
+	userKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(pubkey))
+	assert.NoError(t, err)
+	assert.Equal(t, ssh.FingerprintSHA256(userKey), auditEvent.PublicKeyFingerprint)
+	assert.Equal(t, ssh.FingerprintSHA256(cert.Key), auditEvent.PublicKeyFingerprint)
+
+	assert.Equal(t, ssh.FingerprintSHA256(cert.SignatureKey), auditEvent.CAPublicKeyFingerprint)
+
+	// The key ID identifies this issuance: it is recorded verbatim in the audit
+	// log and carries the subject so sshd's login records stay attributable.
+	assert.Equal(t, cert.KeyId, auditEvent.CertificateKeyId)
+	assert.True(t, strings.HasPrefix(cert.KeyId, "test-sub-"))
 }
 
 func TestLambdaHandlerWithNoMatchingClaims(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,7 +67,7 @@ func TestSign(t *testing.T) {
 	}
 
 	// Build the public key with the CA signer
-	cert, err := sshSigner.CreateSignedCertificate(ssh.UserCert, pubKey, []string{"user1"}, 24*time.Hour)
+	cert, err := sshSigner.CreateSignedCertificate(ssh.UserCert, "test-key-id", pubKey, []string{"user1"}, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("Failed to build certificate: %v", err)
 	}
@@ -99,5 +100,26 @@ func TestSign(t *testing.T) {
 
 	if len(cert.ValidPrincipals) != 1 || cert.ValidPrincipals[0] != "user1" {
 		t.Errorf("Expected principal %q, got %v", "user1", cert.ValidPrincipals)
+	}
+}
+
+func TestNewCertificateKeyID(t *testing.T) {
+	// Two certificates issued in the same second for the same subject must not
+	// share a key ID, otherwise audit rows cannot be told apart.
+	first, err := signer.NewCertificateKeyID("test-sub")
+	if err != nil {
+		t.Fatalf("Failed to generate key id: %v", err)
+	}
+	second, err := signer.NewCertificateKeyID("test-sub")
+	if err != nil {
+		t.Fatalf("Failed to generate key id: %v", err)
+	}
+
+	if first == second {
+		t.Errorf("Expected unique key ids, got %q twice", first)
+	}
+
+	if !strings.HasPrefix(first, "test-sub-") {
+		t.Errorf("Expected key id to carry the subject, got %q", first)
 	}
 }

@@ -68,7 +68,8 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 	// Extract required claims
 	aud, audOk := parsedTokenClaims["aud"].(string)
 	sub, subOk := parsedTokenClaims["sub"].(string)
-	if !audOk || !subOk {
+	iss, issOk := parsedTokenClaims["iss"].(string)
+	if !audOk || !subOk || !issOk {
 		return nil, fmt.Errorf("%w: missing required claims", ErrUnauthorized)
 	}
 
@@ -101,7 +102,13 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 	}
 
 	// Sign the certificate
-	userSSHCert, err := h.signer.CreateSignedCertificate(ssh.UserCert, pubKey, principals, certificateExpiration)
+	keyID, err := signerPkg.NewCertificateKeyID(sub)
+	if err != nil {
+		logger.Error(ctx, "failed to generate certificate key id", "error", err)
+		return nil, fmt.Errorf("%w: %v", ErrInternalServer, err)
+	}
+
+	userSSHCert, err := h.signer.CreateSignedCertificate(ssh.UserCert, keyID, pubKey, principals, certificateExpiration)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign certificate: %w", err)
 	}
@@ -113,15 +120,18 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 
 	// Write event to audit trail
 	keySignEvent := audit.KeySignEvent{
-		SignedAt:         time.Now().UTC(),
-		PublicKey:        string(ssh.MarshalAuthorizedKey(pubKey)),
-		CertificateKeyId: userSSHCert.KeyId,
-		Principals:       principals,
-		SourceIp:         req.SourceIP,
-		UserAgent:        req.UserAgent,
-		Sub:              sub,
-		Aud:              aud,
-		ExpiresAt:        expiresAt,
+		SignedAt:               time.Now().UTC(),
+		PublicKey:              string(ssh.MarshalAuthorizedKey(pubKey)),
+		PublicKeyFingerprint:   ssh.FingerprintSHA256(pubKey),
+		CertificateKeyId:       userSSHCert.KeyId,
+		CAPublicKeyFingerprint: ssh.FingerprintSHA256(userSSHCert.SignatureKey),
+		Principals:             principals,
+		SourceIp:               req.SourceIP,
+		UserAgent:              req.UserAgent,
+		Sub:                    sub,
+		Aud:                    aud,
+		Iss:                    iss,
+		ExpiresAt:              expiresAt,
 	}
 
 	if err := h.auditRepo.Write(keySignEvent); err != nil {
