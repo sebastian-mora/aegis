@@ -113,15 +113,18 @@ func (h *SignerHandler) SignRequest(ctx context.Context, req *SigningRequest) (*
 
 	// Write event to audit trail
 	keySignEvent := audit.KeySignEvent{
-		SignedAt:         time.Now().UTC(),
-		PublicKey:        string(ssh.MarshalAuthorizedKey(pubKey)),
-		CertificateKeyId: userSSHCert.KeyId,
-		Principals:       principals,
-		SourceIp:         req.SourceIP,
-		UserAgent:        req.UserAgent,
-		Sub:              sub,
-		Aud:              aud,
-		ExpiresAt:        expiresAt,
+		SignedAt:               time.Now().UTC(),
+		PublicKey:              string(ssh.MarshalAuthorizedKey(pubKey)),
+		PublicKeyFingerprint:   ssh.FingerprintSHA256(pubKey),
+		CertificateKeyId:       userSSHCert.KeyId,
+		CertificateFingerprint: ssh.FingerprintSHA256(userSSHCert),
+		CAKeyId:                h.signer.KeyID(),
+		Principals:             principals,
+		SourceIp:               req.SourceIP,
+		UserAgent:              req.UserAgent,
+		Sub:                    sub,
+		Aud:                    aud,
+		ExpiresAt:              expiresAt,
 	}
 
 	if err := h.auditRepo.Write(keySignEvent); err != nil {

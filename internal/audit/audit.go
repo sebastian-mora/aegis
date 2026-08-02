@@ -40,14 +40,17 @@ func NewDynamoDbAuditStore(tableName string) (*DynamoAuditStore, error) {
 func (store *DynamoAuditStore) Write(event KeySignEvent) error {
 
 	item := map[string]types.AttributeValue{
-		"SignedAt":         &types.AttributeValueMemberS{Value: event.SignedAt.Format(time.RFC3339)},
-		"PublicKey":        &types.AttributeValueMemberS{Value: event.PublicKey},
-		"CertificateKeyId": &types.AttributeValueMemberS{Value: event.CertificateKeyId},
-		"SourceIp":         &types.AttributeValueMemberS{Value: event.SourceIp},
-		"Sub":              &types.AttributeValueMemberS{Value: event.Sub},
-		"Aud":              &types.AttributeValueMemberS{Value: event.Aud},
-		"ExpiresAt":        &types.AttributeValueMemberS{Value: event.ExpiresAt.Format(time.RFC3339)},
-		"UserAgent":        &types.AttributeValueMemberS{Value: event.UserAgent},
+		"SignedAt":               &types.AttributeValueMemberS{Value: event.SignedAt.Format(time.RFC3339)},
+		"PublicKey":              &types.AttributeValueMemberS{Value: event.PublicKey},
+		"PublicKeyFingerprint":   &types.AttributeValueMemberS{Value: event.PublicKeyFingerprint},
+		"CertificateKeyId":       &types.AttributeValueMemberS{Value: event.CertificateKeyId},
+		"CertificateFingerprint": &types.AttributeValueMemberS{Value: event.CertificateFingerprint},
+		"CAKeyId":                &types.AttributeValueMemberS{Value: event.CAKeyId},
+		"SourceIp":               &types.AttributeValueMemberS{Value: event.SourceIp},
+		"Sub":                    &types.AttributeValueMemberS{Value: event.Sub},
+		"Aud":                    &types.AttributeValueMemberS{Value: event.Aud},
+		"ExpiresAt":              &types.AttributeValueMemberS{Value: event.ExpiresAt.Format(time.RFC3339)},
+		"UserAgent":              &types.AttributeValueMemberS{Value: event.UserAgent},
 	}
 
 	if len(event.Principals) > 0 {

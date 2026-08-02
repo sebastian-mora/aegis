@@ -41,15 +41,18 @@ func TestWriteAuditEvent(t *testing.T) {
 	}
 
 	event := KeySignEvent{
-		SignedAt:         signedAt,
-		PublicKey:        "ssh-ed25519 AAA...",
-		CertificateKeyId: "cert-12345",
-		Principals:       []string{"alice", "bob"},
-		SourceIp:         "192.168.1.1",
-		UserAgent:        "curl/7.79.1",
-		Sub:              "test-user",
-		Aud:              "service-x",
-		ExpiresAt:        time.Now().Add(time.Hour * 12),
+		SignedAt:               signedAt,
+		PublicKey:              "ssh-ed25519 AAA...",
+		PublicKeyFingerprint:   "SHA256:pubkeyfingerprint",
+		CertificateKeyId:       "cert-12345",
+		CertificateFingerprint: "SHA256:certfingerprint",
+		CAKeyId:                "arn:aws:kms:us-east-1:123456789012:key/abc-123",
+		Principals:             []string{"alice", "bob"},
+		SourceIp:               "192.168.1.1",
+		UserAgent:              "curl/7.79.1",
+		Sub:                    "test-user",
+		Aud:                    "service-x",
+		ExpiresAt:              time.Now().Add(time.Hour * 12),
 	}
 
 	err := store.Write(event)
@@ -62,4 +65,7 @@ func TestWriteAuditEvent(t *testing.T) {
 	// Check some key fields
 	assert.Equal(t, &types.AttributeValueMemberS{Value: "test-user"}, actualInput.Item["Sub"])
 	assert.Equal(t, &types.AttributeValueMemberS{Value: "ssh-ed25519 AAA..."}, actualInput.Item["PublicKey"])
+	assert.Equal(t, &types.AttributeValueMemberS{Value: "SHA256:pubkeyfingerprint"}, actualInput.Item["PublicKeyFingerprint"])
+	assert.Equal(t, &types.AttributeValueMemberS{Value: "SHA256:certfingerprint"}, actualInput.Item["CertificateFingerprint"])
+	assert.Equal(t, &types.AttributeValueMemberS{Value: "arn:aws:kms:us-east-1:123456789012:key/abc-123"}, actualInput.Item["CAKeyId"])
 }
